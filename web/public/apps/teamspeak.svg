@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200">
+  <!-- Original drawing (no official artwork): a headset next to a list of voice channels. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0f1b33"/>
+      <stop offset="1" stop-color="#1f4f8f"/>
+    </linearGradient>
+  </defs>
+  <rect width="320" height="200" fill="url(#bg)"/>
+  <circle cx="60" cy="180" r="80" fill="#2a7de1" opacity=".25"/>
+
+  <!-- channel list -->
+  <g>
+    <rect x="164" y="30" width="132" height="140" rx="12" fill="#0b1426" opacity=".9"/>
+    <rect x="178" y="46" width="70" height="8" rx="4" fill="#5d7bb0"/>
+    <g>
+      <circle cx="190" cy="76" r="7" fill="#3de0ff"/>
+      <rect x="204" y="72" width="76" height="8" rx="4" fill="#dbe7ff"/>
+      <circle cx="190" cy="100" r="7" fill="#5d7bb0"/>
+      <rect x="204" y="96" width="58" height="8" rx="4" fill="#8fa6cf"/>
+      <circle cx="190" cy="124" r="7" fill="#5d7bb0"/>
+      <rect x="204" y="120" width="68" height="8" rx="4" fill="#8fa6cf"/>
+    </g>
+    <rect x="178" y="146" width="48" height="8" rx="4" fill="#5d7bb0"/>
+  </g>
+
+  <!-- headset -->
+  <g>
+    <path d="M40 112c0-70 96-70 96 0" fill="none" stroke="#dbe7ff" stroke-width="10" stroke-linecap="round"/>
+    <rect x="26" y="100" width="28" height="50" rx="12" fill="#2a7de1"/>
+    <rect x="122" y="100" width="28" height="50" rx="12" fill="#2a7de1"/>
+    <path d="M40 150c0 26 22 32 44 30" fill="none" stroke="#dbe7ff" stroke-width="6" stroke-linecap="round"/>
+    <circle cx="90" cy="179" r="9" fill="#3de0ff"/>
+  </g>
+  <g fill="none" stroke="#3de0ff" stroke-width="4" stroke-linecap="round" opacity=".9">
+    <path d="M108 168q8 10 0 22"/>
+    <path d="M120 160q14 18 0 38"/>
+  </g>
+</svg>

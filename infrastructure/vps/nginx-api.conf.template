@@ -1,0 +1,44 @@
+# Généré par provision.sh. Vhost autonome : aucun include ni upstream partagé avec les
+# autres sites du serveur. Les noms de variables sont préfixés pour éviter toute collision.
+
+# Derrière Cloudflare, $remote_addr est une adresse Cloudflare : l'IP du visiteur est dans
+# CF-Connecting-IP. Limite connue : quelqu'un qui joint le VPS sans passer par Cloudflare
+# peut forger cet en-tête (à fermer avec les Authenticated Origin Pulls).
+map $http_cf_connecting_ip $@APP@_client_ip {
+    ""      $remote_addr;
+    default $http_cf_connecting_ip;
+}
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name @API_DOMAIN@;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    server_name @API_DOMAIN@;
+
+    ssl_certificate     /etc/@APP@/tls/origin.pem;
+    ssl_certificate_key /etc/@APP@/tls/origin.key;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+
+    access_log /var/log/nginx/@APP@-api.access.log;
+    error_log  /var/log/nginx/@APP@-api.error.log;
+
+    client_max_body_size 32k;
+
+    location / {
+        proxy_pass http://127.0.0.1:@API_PORT@;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Host              $host;
+        # Remplacé, jamais complété : l'API ne voit qu'une seule adresse.
+        proxy_set_header X-Forwarded-For   $@APP@_client_ip;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_connect_timeout 5s;
+        proxy_read_timeout 30s;
+    }
+}

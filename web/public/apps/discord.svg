@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200">
+  <!-- Original drawing (no official artwork): a video call with a chat bubble. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#23254d"/>
+      <stop offset="1" stop-color="#4752c4"/>
+    </linearGradient>
+  </defs>
+  <rect width="320" height="200" fill="url(#bg)"/>
+  <circle cx="270" cy="30" r="70" fill="#5865f2" opacity=".35"/>
+
+  <!-- two call tiles -->
+  <g>
+    <rect x="28" y="42" width="120" height="84" rx="12" fill="#1a1b3a"/>
+    <circle cx="88" cy="76" r="18" fill="#ff8a5c"/>
+    <path d="M58 126c4-18 16-26 30-26s26 8 30 26Z" fill="#ff6b2c"/>
+    <rect x="28" y="42" width="120" height="84" rx="12" fill="none" stroke="#3de0ff" stroke-width="3"/>
+
+    <rect x="160" y="42" width="120" height="84" rx="12" fill="#1a1b3a"/>
+    <circle cx="220" cy="76" r="18" fill="#b9a4ff"/>
+    <path d="M190 126c4-18 16-26 30-26s26 8 30 26Z" fill="#8b5cf6"/>
+  </g>
+
+  <!-- call controls -->
+  <g>
+    <rect x="98" y="142" width="124" height="36" rx="18" fill="#1a1b3a"/>
+    <circle cx="124" cy="160" r="10" fill="#3de0ff"/>
+    <circle cx="160" cy="160" r="10" fill="#8b90c9"/>
+    <circle cx="196" cy="160" r="10" fill="#ff4d6d"/>
+  </g>
+
+  <!-- chat bubble -->
+  <path d="M236 18h54a10 10 0 0 1 10 10v22a10 10 0 0 1-10 10h-34l-14 12V60h-6a10 10 0 0 1-10-10V28a10 10 0 0 1 10-10Z" fill="#fff" opacity=".95"/>
+  <g fill="#5865f2">
+    <circle cx="250" cy="39" r="4"/>
+    <circle cx="264" cy="39" r="4"/>
+    <circle cx="278" cy="39" r="4"/>
+  </g>
+</svg>

@@ -1,0 +1,20 @@
+# Configuration Apache du site statique. Autonome : ne dépend d'aucun autre site de l'hébergement.
+ErrorDocument 404 /404.html
+Options -Indexes
+
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "DENY"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
+
+    # Les pages sont revalidées à chaque visite : une mise en ligne est visible tout de suite.
+    <FilesMatch "\.html$">
+        Header set Cache-Control "public, max-age=0, must-revalidate"
+    </FilesMatch>
+
+    # Les fichiers de _next/static ont un nom unique par version : cache d'un an.
+    <If "%{REQUEST_URI} =~ m#^/_next/static/#">
+        Header set Cache-Control "public, max-age=31536000, immutable"
+    </If>
+</IfModule>

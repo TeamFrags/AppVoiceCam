@@ -1,0 +1,6 @@
+// No console window behind the application in release builds.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+fn main() {
+    app_lib::run();
+}

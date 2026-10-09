@@ -1,0 +1,43 @@
+[package]
+name = "app-desktop"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "app_lib"
+crate-type = ["rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+serde_json = "1"
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-updater = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+tokio = { version = "1", features = ["net", "io-util", "time", "sync", "macros", "rt"] }
+keyring = { version = "3", features = ["windows-native"] }
+sha2 = "0.10"
+base64 = "0.22"
+rand = "0.8"
+open = "5"
+cpal = "0.15"
+nokhwa = { version = "0.10", features = ["input-native"] }
+image = { version = "0.25", default-features = false, features = ["jpeg"] }
+
+[profile.dev]
+# No debug info: much smaller build directory, and compile errors read the same.
+debug = 0
+
+[profile.release]
+# The shipped binary carries no symbol names and is optimised as one unit, which is what makes
+# it far harder to read than script files. It is hardening, not a secret store: nothing that
+# must stay private is compiled in.
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"

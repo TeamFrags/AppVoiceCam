@@ -1,0 +1,639 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  color-scheme: dark;
+}
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  overflow: hidden;
+  background: var(--brand-night);
+  color: var(--brand-mist);
+  font: 15px/1.5 var(--brand-font-body);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+/* Two soft lights drifting behind the interface. */
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  z-index: -1;
+  width: 60vmax;
+  height: 60vmax;
+  border-radius: 50%;
+  filter: blur(90px);
+  pointer-events: none;
+}
+body::before {
+  top: -28vmax;
+  left: -18vmax;
+  background: var(--brand-spirit);
+  opacity: 0.32;
+}
+body::after {
+  right: -22vmax;
+  bottom: -32vmax;
+  background: var(--brand-ember);
+  opacity: 0.16;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+}
+
+h1,
+h2 {
+  font-family: var(--brand-font-display);
+  margin: 0 0 8px;
+  letter-spacing: -0.01em;
+}
+h1 {
+  font-size: 1.7rem;
+}
+h2 {
+  font-size: 1.05rem;
+}
+p {
+  margin: 0 0 12px;
+}
+.muted {
+  color: var(--brand-haze);
+}
+.gradient-text {
+  background: var(--brand-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+:focus-visible {
+  outline: 2px solid var(--brand-foxfire);
+  outline-offset: 2px;
+}
+
+.center {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+.card {
+  background: color-mix(in srgb, var(--brand-ink) 78%, transparent);
+  backdrop-filter: blur(18px);
+  border: 1px solid color-mix(in srgb, var(--brand-line) 75%, transparent);
+  border-radius: 18px;
+  padding: 22px;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.05),
+    0 24px 60px rgb(0 0 0 / 0.35);
+}
+.card.narrow {
+  width: 100%;
+  max-width: 390px;
+  padding: 30px 28px 24px;
+  text-align: center;
+}
+
+/* Mascot with a halo, on the sign-in and information screens. */
+.logo-halo {
+  position: relative;
+  isolation: isolate;
+  width: 84px;
+  height: 84px;
+  margin: 0 auto 14px;
+}
+.logo-halo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.logo-halo::before {
+  content: '';
+  position: absolute;
+  inset: -18%;
+  z-index: -1;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--brand-spirit) 65%, transparent),
+    transparent 70%
+  );
+  filter: blur(14px);
+}
+
+.stack {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+  text-align: left;
+}
+.stack:empty {
+  display: none;
+}
+label {
+  display: grid;
+  gap: 5px;
+  font-size: 0.85rem;
+  color: var(--brand-haze);
+}
+input,
+select {
+  width: 100%;
+  padding: 11px 13px;
+  border-radius: 12px;
+  border: 1px solid var(--brand-line);
+  background: color-mix(in srgb, var(--brand-night) 70%, transparent);
+  color: var(--brand-mist);
+  font: inherit;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+input:hover,
+select:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--brand-foxfire) 45%, var(--brand-line));
+}
+input:focus,
+select:focus {
+  outline: none;
+  border-color: var(--brand-foxfire);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand-foxfire) 18%, transparent);
+}
+select:disabled {
+  opacity: 0.6;
+}
+
+.btn {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  padding: 11px 18px;
+  font: 600 0.95rem var(--brand-font-body);
+  background: linear-gradient(
+    135deg,
+    var(--brand-ember),
+    color-mix(in srgb, var(--brand-ember) 55%, var(--brand-spirit))
+  );
+  /* Dark text: white on the primary colour does not reach AA contrast. */
+  color: var(--brand-night);
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    transform 0.15s,
+    box-shadow 0.15s,
+    background 0.15s,
+    border-color 0.15s;
+}
+.btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--brand-ember) 40%, transparent);
+}
+.btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+.btn.ghost,
+.btn.stop {
+  background: color-mix(in srgb, var(--brand-ink-raised) 50%, transparent);
+  color: var(--brand-mist);
+  border-color: var(--brand-line);
+}
+.btn.ghost:hover:not(:disabled),
+.btn.stop:hover:not(:disabled) {
+  background: var(--brand-ink-raised);
+  border-color: color-mix(in srgb, var(--brand-mist) 35%, var(--brand-line));
+  box-shadow: none;
+}
+/* A capture that is running: the button now stops it. */
+.btn.stop {
+  border-color: color-mix(in srgb, var(--brand-danger) 70%, transparent);
+}
+.btn.small {
+  padding: 6px 12px;
+  font-size: 0.85rem;
+  border-radius: 10px;
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn.loading {
+  color: transparent;
+}
+.btn.loading::after,
+.spinner {
+  content: '';
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--brand-night) 30%, transparent);
+  border-top-color: var(--brand-night);
+}
+.btn.loading::after {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+}
+.spinner {
+  display: block;
+  margin: 0 auto;
+  border-color: var(--brand-line);
+  border-top-color: var(--brand-foxfire);
+}
+.links {
+  display: flex;
+  justify-content: space-between;
+  margin: 4px 0 0;
+}
+.link {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--brand-foxfire);
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.notice {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--brand-warning);
+  background: color-mix(in srgb, var(--brand-warning) 10%, var(--brand-ink));
+  text-align: left;
+}
+.notice.error {
+  border-color: var(--brand-danger);
+  background: color-mix(in srgb, var(--brand-danger) 12%, var(--brand-ink));
+}
+
+/* ── Top bar ── */
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: color-mix(in srgb, var(--brand-night) 70%, transparent);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid color-mix(in srgb, var(--brand-line) 70%, transparent);
+}
+.bar strong {
+  font: 700 1.15rem var(--brand-font-display);
+}
+.spacer {
+  flex: 1;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 4px 12px 4px 4px;
+  border-radius: 999px;
+  border: 1px solid var(--brand-line);
+  background: color-mix(in srgb, var(--brand-ink) 70%, transparent);
+  font-size: 0.85rem;
+  color: var(--brand-haze);
+}
+.chip span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 220px;
+}
+.avatar {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--brand-gradient);
+  color: var(--brand-night);
+  font-weight: 700;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+}
+.badge {
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--brand-line);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--brand-haze);
+}
+.badge.premium {
+  border-color: var(--brand-spirit);
+  color: var(--brand-mist);
+  background: color-mix(in srgb, var(--brand-spirit) 30%, transparent);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--brand-spirit) 45%, transparent);
+}
+
+/* ── Workspace ── */
+.workspace {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 3fr 2fr;
+  grid-auto-rows: min-content;
+  gap: 16px;
+  padding: 16px;
+  overflow: auto;
+}
+.workspace .notice {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+.card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.card-head h2 {
+  margin: 0;
+}
+.card-head svg {
+  width: 34px;
+  height: 34px;
+  padding: 7px;
+  border-radius: 10px;
+  fill: none;
+  stroke: var(--brand-foxfire);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  background: color-mix(in srgb, var(--brand-foxfire) 12%, transparent);
+}
+/* "Stopped" / "Live" next to each title. */
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--brand-haze);
+}
+.status::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--brand-line);
+}
+.status.on {
+  color: var(--brand-foxfire);
+}
+.status.on::before {
+  background: var(--brand-foxfire);
+  box-shadow: 0 0 10px var(--brand-foxfire);
+}
+.row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.row .btn {
+  flex: none;
+}
+.preview {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--brand-line);
+  border-radius: 14px;
+  background: radial-gradient(circle at 50% 35%, var(--brand-ink-raised), var(--brand-night) 75%);
+  transition:
+    border-color 0.3s,
+    box-shadow 0.3s;
+}
+.preview.on {
+  border-color: var(--brand-foxfire);
+  box-shadow: 0 0 36px color-mix(in srgb, var(--brand-foxfire) 22%, transparent);
+}
+.preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.preview p {
+  margin: 0;
+}
+.live-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px 3px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--brand-night) 75%, transparent);
+  backdrop-filter: blur(6px);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.live-badge::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--brand-danger);
+}
+.stat {
+  margin: 8px 0 0;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+.meter {
+  container-type: inline-size;
+  height: 14px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--brand-night) 70%, transparent);
+  border: 1px solid var(--brand-line);
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+.meter div {
+  height: 100%;
+  width: 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--brand-foxfire), var(--brand-spirit), var(--brand-ember));
+  /* The gradient spans the whole meter, so a loud voice reaches the warm end. */
+  background-size: 100cqw 100%;
+  box-shadow: 0 0 12px color-mix(in srgb, var(--brand-foxfire) 60%, transparent);
+  transition: width 60ms linear;
+}
+
+.update {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: calc(100% - 32px);
+  padding: 10px 12px 10px 16px;
+  border-radius: var(--brand-radius);
+  border: 1px solid var(--brand-foxfire);
+  background: color-mix(in srgb, var(--brand-ink-raised) 85%, transparent);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 12px 40px rgb(0 0 0 / 0.5);
+}
+
+select.language {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  z-index: 10;
+  width: auto;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  color: var(--brand-haze);
+  background: color-mix(in srgb, var(--brand-ink) 80%, transparent);
+  backdrop-filter: blur(14px);
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/* ── Motion, only for people who have not turned it off in Windows ── */
+@keyframes rise {
+  from {
+    opacity: 0;
+    translate: 0 14px;
+  }
+}
+@keyframes drift {
+  to {
+    translate: 8vmax 6vmax;
+    scale: 1.15;
+  }
+}
+@keyframes float {
+  50% {
+    translate: 0 -6px;
+  }
+}
+@keyframes halo {
+  50% {
+    opacity: 0.55;
+    scale: 1.15;
+  }
+}
+@keyframes spin {
+  to {
+    rotate: 1turn;
+  }
+}
+@keyframes shake {
+  20%,
+  60% {
+    translate: -5px 0;
+  }
+  40%,
+  80% {
+    translate: 5px 0;
+  }
+}
+@keyframes pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+@keyframes sheen {
+  to {
+    translate: 250% 0;
+  }
+}
+
+.btn.loading::after,
+.spinner {
+  animation: spin 0.7s linear infinite;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  body::before {
+    animation: drift 22s ease-in-out infinite alternate;
+  }
+  body::after {
+    animation: drift 28s ease-in-out infinite alternate-reverse;
+  }
+
+  /* Each screen eases in; the panels of the workspace follow one another. */
+  .center > *,
+  .bar,
+  .workspace > .card,
+  .update {
+    animation: rise 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+  }
+  .workspace > .card:nth-of-type(1) {
+    animation-delay: 0.06s;
+  }
+  .workspace > .card:nth-of-type(2) {
+    animation-delay: 0.14s;
+  }
+  .logo-halo img {
+    animation: float 5s ease-in-out infinite;
+  }
+  .logo-halo::before {
+    animation: halo 5s ease-in-out infinite;
+  }
+  .notice:not([hidden]) {
+    animation: rise 0.25s ease-out;
+  }
+  .notice.error:not([hidden]) {
+    animation: shake 0.35s ease-in-out;
+  }
+  .status.on::before,
+  .live-badge::before {
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+  /* A light sweeps the primary button on hover, and the idle preview while it waits. */
+  .btn:not(.ghost, .stop, :disabled)::before,
+  .preview:not(.on)::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -60%;
+    width: 40%;
+    background: linear-gradient(100deg, transparent, rgb(255 255 255 / 0.28), transparent);
+    pointer-events: none;
+  }
+  .btn:not(.ghost, .stop, :disabled):hover::before {
+    animation: sheen 0.7s ease-out;
+  }
+  .preview:not(.on)::before {
+    background: linear-gradient(100deg, transparent, rgb(255 255 255 / 0.05), transparent);
+    animation: sheen 3.2s ease-in-out infinite;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
+}

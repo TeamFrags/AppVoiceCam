@@ -1,0 +1,33 @@
+{
+  "name": "Kitsuvox",
+  "domain": "kitsuvox.com",
+  "tagline": "Change de tête. Change de voix.",
+  "taglines": {
+    "en": "Change your face. Change your voice.",
+    "es": "Cambia de cara. Cambia de voz.",
+    "pt": "Mude de rosto. Mude de voz.",
+    "de": "Neues Gesicht. Neue Stimme."
+  },
+  "mascotName": "Kibi",
+  "colors": {
+    "ember": { "hex": "#FF6B2C", "label": "Ember", "role": "Primaire : boutons d'action" },
+    "emberDeep": { "hex": "#D9480F", "label": "Ember Deep", "role": "Survol, état pressé" },
+    "foxfire": { "hex": "#3DE0FF", "label": "Foxfire", "role": "Accent : état « en direct »" },
+    "spirit": { "hex": "#8B5CF6", "label": "Spirit", "role": "Secondaire : Premium" },
+    "cream": { "hex": "#FFF4E6", "label": "Cream", "role": "Surfaces claires" },
+    "night": { "hex": "#0E0B1A", "label": "Night", "role": "Fond" },
+    "ink": { "hex": "#1A1530", "label": "Ink", "role": "Panneaux" },
+    "inkRaised": { "hex": "#261F45", "label": "Ink Raised", "role": "Cartes, survols" },
+    "line": { "hex": "#3B2A6B", "label": "Line", "role": "Bordures" },
+    "mist": { "hex": "#F4EFFA", "label": "Mist", "role": "Texte principal" },
+    "haze": { "hex": "#A79FC4", "label": "Haze", "role": "Texte secondaire" },
+    "success": { "hex": "#3DDC97", "label": "Succès", "role": "Confirmation" },
+    "warning": { "hex": "#FFC857", "label": "Alerte", "role": "Avertissement" },
+    "danger": { "hex": "#FF4D6D", "label": "Danger", "role": "Erreurs, bannissement" }
+  },
+  "gradient": ["ember", "spirit", "foxfire"],
+  "fonts": {
+    "display": "Sora",
+    "body": "Inter"
+  }
+}

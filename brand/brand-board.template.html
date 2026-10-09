@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{name}} — planche de marque</title>
+    <link rel="stylesheet" href="../../shared/brand/tokens.css" />
+    <style>
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--brand-night);
+        color: var(--brand-mist);
+        font-family: var(--brand-font-body);
+        line-height: 1.5;
+      }
+      main { max-width: 960px; margin: 0 auto; padding: 48px 16px 80px; }
+      .hero { display: flex; flex-wrap: wrap; align-items: center; gap: 32px; }
+      .hero img { width: 220px; height: 220px; }
+      h1 {
+        margin: 0;
+        font-family: var(--brand-font-display);
+        font-size: clamp(44px, 9vw, 84px);
+        letter-spacing: -0.03em;
+        background: var(--brand-gradient);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+      h2 { font-family: var(--brand-font-display); margin: 56px 0 16px; font-size: 22px; }
+      .tagline { font-size: 20px; color: var(--brand-haze); margin: 4px 0 20px; }
+      .row { display: flex; flex-wrap: wrap; gap: 12px; }
+      .btn {
+        border: 0;
+        border-radius: var(--brand-radius);
+        padding: 12px 20px;
+        font: 600 15px var(--brand-font-body);
+        background: var(--brand-ember);
+        color: var(--brand-night);
+      }
+      .btn.ghost { background: transparent; color: var(--brand-mist); border: 1px solid var(--brand-line); }
+      .live {
+        display: inline-flex; align-items: center; gap: 8px;
+        padding: 12px 16px; border-radius: 999px;
+        background: var(--brand-ink); color: var(--brand-foxfire); font-weight: 600; font-size: 14px;
+      }
+      .live::before {
+        content: ''; width: 9px; height: 9px; border-radius: 50%;
+        background: var(--brand-foxfire); box-shadow: 0 0 12px var(--brand-foxfire);
+      }
+      .swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+      .swatch { border-radius: var(--brand-radius); overflow: hidden; background: var(--brand-ink); border: 1px solid var(--brand-line); }
+      .swatch i { display: block; height: 84px; }
+      .swatch div { padding: 10px 12px; font-size: 14px; }
+      .swatch code { display: block; color: var(--brand-haze); font-size: 12px; }
+      .card {
+        background: var(--brand-ink); border: 1px solid var(--brand-line);
+        border-radius: var(--brand-radius); padding: 20px; flex: 1 1 260px;
+      }
+      .card.premium { border-color: var(--brand-spirit); }
+      .price { font: 700 32px var(--brand-font-display); }
+      .badge { color: var(--brand-spirit); font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; }
+      .icons { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
+      .icons img { border-radius: 22%; }
+      .on-cream { background: var(--brand-cream); }
+      .on-ink { background: var(--brand-ink); }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="hero">
+        <img src="mascot.svg" alt="{{mascotName}}, la mascotte {{name}}" />
+        <div>
+          <h1>{{name}}</h1>
+          <p class="tagline">{{tagline}}</p>
+          <div class="row">
+            <button class="btn">Télécharger pour Windows</button>
+            <button class="btn ghost">Voir les voix</button>
+            <span class="live">En direct · 12 ms</span>
+          </div>
+        </div>
+      </section>
+
+      <h2>Palette</h2>
+      <div class="swatches">
+{{swatches}}
+      </div>
+
+      <h2>En situation</h2>
+      <div class="row">
+        <div class="card">
+          <div class="badge" style="color: var(--brand-haze)">Gratuit</div>
+          <div class="price">0 €</div>
+          <p>Quelques visages et voix pour commencer.</p>
+          <button class="btn ghost">Créer un compte</button>
+        </div>
+        <div class="card premium">
+          <div class="badge">Premium</div>
+          <div class="price">9,99 € <small style="font-size: 14px; color: var(--brand-haze)">/ mois</small></div>
+          <p>Tous les visages, toutes les voix, clonage de voix.</p>
+          <button class="btn">Passer Premium</button>
+        </div>
+      </div>
+
+      <h2>{{mascotName}} sur les fonds autorisés</h2>
+      <div class="icons">
+        <img src="mascot.svg" alt="" width="120" height="120" style="background: var(--brand-night); border: 1px solid var(--brand-line)" />
+        <img src="mascot.svg" alt="" width="120" height="120" class="on-ink" />
+        <img src="mascot.svg" alt="" width="120" height="120" class="on-cream" />
+        <img src="mascot.svg" alt="" width="64" height="64" class="on-ink" />
+        <img src="mascot.svg" alt="" width="32" height="32" class="on-ink" />
+      </div>
+    </main>
+  </body>
+</html>

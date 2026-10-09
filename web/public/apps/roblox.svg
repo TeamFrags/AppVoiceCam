@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200">
+  <!-- Original drawing (no official artwork): two blocky avatars on a studded baseplate. -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1b2a55"/>
+      <stop offset="1" stop-color="#3b6fd1"/>
+    </linearGradient>
+  </defs>
+  <rect width="320" height="200" fill="url(#sky)"/>
+  <g fill="#fff" opacity=".85">
+    <rect x="30" y="28" width="46" height="14" rx="3"/>
+    <rect x="44" y="18" width="24" height="12" rx="3"/>
+    <rect x="232" y="40" width="54" height="14" rx="3"/>
+    <rect x="246" y="30" width="26" height="12" rx="3"/>
+  </g>
+
+  <!-- baseplate with studs -->
+  <rect y="150" width="320" height="50" fill="#3aa655"/>
+  <rect y="150" width="320" height="8" fill="#56c271"/>
+  <g fill="#2f8a47">
+    <circle cx="30" cy="176" r="7"/><circle cx="74" cy="176" r="7"/><circle cx="118" cy="176" r="7"/>
+    <circle cx="162" cy="176" r="7"/><circle cx="206" cy="176" r="7"/><circle cx="250" cy="176" r="7"/>
+    <circle cx="294" cy="176" r="7"/>
+  </g>
+
+  <!-- main avatar -->
+  <g>
+    <rect x="112" y="118" width="20" height="36" rx="3" fill="#4b5563"/>
+    <rect x="136" y="118" width="20" height="36" rx="3" fill="#4b5563"/>
+    <rect x="108" y="72" width="52" height="50" rx="4" fill="#e5484d"/>
+    <rect x="86" y="74" width="20" height="44" rx="4" fill="#f2c94c"/>
+    <rect x="162" y="62" width="20" height="44" rx="4" fill="#f2c94c" transform="rotate(-28 172 84)"/>
+    <rect x="112" y="30" width="44" height="40" rx="9" fill="#f2c94c"/>
+    <rect x="122" y="44" width="6" height="9" rx="2" fill="#1a1530"/>
+    <rect x="140" y="44" width="6" height="9" rx="2" fill="#1a1530"/>
+    <path d="M124 58q10 7 20 0" fill="none" stroke="#1a1530" stroke-width="3" stroke-linecap="round"/>
+  </g>
+
+  <!-- friend -->
+  <g>
+    <rect x="222" y="126" width="14" height="28" rx="2" fill="#374151"/>
+    <rect x="240" y="126" width="14" height="28" rx="2" fill="#374151"/>
+    <rect x="218" y="92" width="40" height="38" rx="3" fill="#8b5cf6"/>
+    <rect x="202" y="94" width="14" height="32" rx="3" fill="#ffd9b5"/>
+    <rect x="260" y="94" width="14" height="32" rx="3" fill="#ffd9b5"/>
+    <rect x="222" y="60" width="32" height="30" rx="7" fill="#ffd9b5"/>
+    <rect x="229" y="70" width="5" height="7" rx="2" fill="#1a1530"/>
+    <rect x="242" y="70" width="5" height="7" rx="2" fill="#1a1530"/>
+  </g>
+
+  <!-- voice chat waves above the main avatar -->
+  <g fill="none" stroke="#3de0ff" stroke-width="4" stroke-linecap="round">
+    <path d="M176 34q8 8 0 18"/>
+    <path d="M188 26q14 16 0 34"/>
+  </g>
+</svg>

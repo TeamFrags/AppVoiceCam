@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="t d">
+  <title id="t">{{mascotName}}, la mascotte {{name}}</title>
+  <desc id="d">Un renard kitsune orange qui fait un clin d'œil, coiffé d'un casque-micro violet, accompagné d'une flamme bleue.</desc>
+
+  <!-- arceau du casque -->
+  <path d="M78 300 C78 84 434 84 434 300" fill="none" stroke="{{spirit}}" stroke-width="20" stroke-linecap="round"/>
+
+  <!-- oreilles -->
+  <g stroke-linejoin="round" stroke-width="14">
+    <path d="M122 218 L112 74 L236 162 Z" fill="{{ember}}" stroke="{{ember}}"/>
+    <path d="M390 218 L400 74 L276 162 Z" fill="{{ember}}" stroke="{{ember}}"/>
+    <path d="M140 190 L134 110 L204 160 Z" fill="{{line}}" stroke="{{line}}" stroke-width="6"/>
+    <path d="M372 190 L378 110 L308 160 Z" fill="{{line}}" stroke="{{line}}" stroke-width="6"/>
+  </g>
+
+  <!-- tête -->
+  <path d="M256 150 C180 150 110 200 96 280 C90 322 150 402 256 432 C362 402 422 322 416 280 C402 200 332 150 256 150 Z" fill="{{ember}}"/>
+  <!-- joues et museau -->
+  <path d="M96 285 C150 290 215 315 256 350 C297 315 362 290 416 285 C420 325 362 402 256 432 C150 402 92 325 96 285 Z" fill="{{cream}}"/>
+
+  <!-- marque de feu follet sur le front -->
+  <path d="M256 180 L270 206 L256 232 L242 206 Z" fill="{{foxfire}}"/>
+
+  <!-- œil gauche ouvert -->
+  <ellipse cx="194" cy="264" rx="17" ry="20" fill="{{ink}}"/>
+  <circle cx="200" cy="256" r="6" fill="#FFFFFF"/>
+  <!-- œil droit : clin d'œil -->
+  <path d="M298 268 Q318 246 338 268" fill="none" stroke="{{ink}}" stroke-width="9" stroke-linecap="round"/>
+
+  <!-- moustaches kitsune -->
+  <g fill="none" stroke="{{ember}}" stroke-width="7" stroke-linecap="round">
+    <path d="M150 338 L176 346"/>
+    <path d="M362 338 L336 346"/>
+  </g>
+
+  <!-- truffe et sourire -->
+  <path d="M240 366 Q256 358 272 366 Q268 384 256 388 Q244 384 240 366 Z" fill="{{ink}}"/>
+  <path d="M232 400 Q256 418 280 400" fill="none" stroke="{{ink}}" stroke-width="7" stroke-linecap="round"/>
+
+  <!-- écouteurs -->
+  <rect x="50" y="262" width="56" height="96" rx="24" fill="{{spirit}}"/>
+  <rect x="406" y="262" width="56" height="96" rx="24" fill="{{spirit}}"/>
+  <rect x="64" y="284" width="14" height="52" rx="7" fill="{{foxfire}}"/>
+  <rect x="434" y="284" width="14" height="52" rx="7" fill="{{foxfire}}"/>
+
+  <!-- perche micro -->
+  <path d="M78 356 C78 430 140 452 196 436" fill="none" stroke="{{spirit}}" stroke-width="9" stroke-linecap="round"/>
+  <circle cx="204" cy="433" r="15" fill="{{foxfire}}"/>
+
+  <!-- kitsunebi : la flamme bleue -->
+  <path d="M452 34 C486 76 494 112 464 132 C434 142 416 112 430 86 C438 70 450 58 452 34 Z" fill="{{foxfire}}"/>
+  <path d="M454 82 C468 98 470 112 458 120 C446 122 440 110 446 100 C450 94 453 90 454 82 Z" fill="#E6FBFF"/>
+</svg>

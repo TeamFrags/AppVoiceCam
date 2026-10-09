@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200">
+  <!-- Original drawing (no official artwork): a crosshair over angular shards. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#16181f"/>
+      <stop offset="1" stop-color="#3a1620"/>
+    </linearGradient>
+  </defs>
+  <rect width="320" height="200" fill="url(#bg)"/>
+  <path d="M0 200 120 60l40 140Z" fill="#ff4655" opacity=".9"/>
+  <path d="M320 0 210 110 250 0Z" fill="#ff4655" opacity=".55"/>
+  <path d="M320 200 230 120l90-40Z" fill="#ece8e1" opacity=".12"/>
+  <path d="M0 0h90L0 70Z" fill="#ece8e1" opacity=".08"/>
+
+  <!-- crosshair -->
+  <g stroke="#ece8e1" stroke-width="6" stroke-linecap="round" fill="none">
+    <circle cx="196" cy="96" r="40"/>
+    <path d="M196 34v28M196 130v28M134 96h28M230 96h28"/>
+  </g>
+  <circle cx="196" cy="96" r="6" fill="#3de0ff"/>
+
+  <!-- team voice indicator -->
+  <g>
+    <rect x="22" y="24" width="96" height="26" rx="13" fill="#0f1116" opacity=".85"/>
+    <circle cx="38" cy="37" r="7" fill="#3de0ff"/>
+    <g fill="#ece8e1">
+      <rect x="54" y="33" width="4" height="8" rx="2"/>
+      <rect x="62" y="29" width="4" height="16" rx="2"/>
+      <rect x="70" y="31" width="4" height="12" rx="2"/>
+      <rect x="78" y="27" width="4" height="20" rx="2"/>
+      <rect x="86" y="32" width="4" height="10" rx="2"/>
+      <rect x="94" y="34" width="4" height="6" rx="2"/>
+    </g>
+  </g>
+</svg>

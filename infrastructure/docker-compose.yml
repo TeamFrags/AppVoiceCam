@@ -1,0 +1,25 @@
+# Services locaux pour le développement. Les identifiants ci-dessous sont réservés au poste
+# de développement et ne doivent jamais servir ailleurs.
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: app
+    ports:
+      - '127.0.0.1:5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U app']
+      interval: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '127.0.0.1:6379:6379'
+
+volumes:
+  pgdata:

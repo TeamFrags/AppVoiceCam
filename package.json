@@ -1,0 +1,36 @@
+{
+  "name": "app-monorepo",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Changement de visage et de voix en temps réel",
+  "workspaces": [
+    "backend",
+    "web",
+    "desktop"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w backend",
+    "test": "npm run test -w backend",
+    "typecheck": "npm run typecheck -w backend && npm run typecheck -w web && npm run typecheck -w desktop",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "brand": "node brand/build.mjs",
+    "brand:check": "node brand/check-domain.mjs",
+    "dev:web": "npm run dev -w web",
+    "build:web": "npm run brand && npm run build -w web",
+    "test:e2e": "npm run brand && npm run build:e2e -w web && node web/e2e/run.mjs",
+    "dev:desktop": "npm run dev -w desktop",
+    "build:desktop": "npm run brand && npm run build -w desktop",
+    "test:desktop": "npm run test -w desktop"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.12.0",
+    "eslint": "^9.12.0",
+    "prettier": "^3.3.3",
+    "typescript": "^5.6.3",
+    "typescript-eslint": "^8.8.1"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

@@ -1,0 +1,67 @@
+# Publishes a version of the desktop application when a tag like v0.2.0 is pushed.
+#
+# The source stays in this private repository. The installer and its manifest go to a separate
+# PUBLIC repository that holds nothing else: installed copies download their updates from it.
+#
+# To set once in this repository (Settings → Secrets and variables → Actions):
+#   variable RELEASES_REPO                 owner/name of the public releases repository
+#   secret   TAURI_SIGNING_PRIVATE_KEY     content of the update signing key
+#   secret   RELEASES_TOKEN                fine-grained token, "Contents: read and write" on the
+#                                          releases repository only
+name: Release desktop
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency: release-desktop
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      APP_UPDATE_REPO: ${{ vars.RELEASES_REPO }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            desktop/src-tauri/target
+          key: cargo-${{ runner.os }}-${{ hashFiles('desktop/src-tauri/Cargo.lock') }}
+
+      - run: npm ci
+
+      - name: Build and sign
+        run: npm run build:desktop
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ''
+
+      - name: Prepare release files
+        run: node desktop/scripts/release-manifest.mjs ${{ github.ref_name }}
+
+      # Created as a draft: nobody receives the update until the release is published by hand
+      # on GitHub, which leaves time to try the installer first.
+      - name: Create draft release
+        shell: bash
+        run: >
+          gh release create "$GITHUB_REF_NAME"
+          desktop/src-tauri/target/release-assets/*
+          --repo "$APP_UPDATE_REPO"
+          --title "$GITHUB_REF_NAME"
+          --notes ""
+          --draft
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}

@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.data/
+.env
+.env.*
+!.env.example
+*.pem
+coverage/
+.next/
+out/
+next-env.d.ts
+!web/.env.development
+web/e2e/screenshots/
+target/
+gen/
+desktop/screenshots/

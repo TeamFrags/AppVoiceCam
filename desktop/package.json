@@ -1,0 +1,30 @@
+{
+  "name": "@app/desktop",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "node scripts/build.mjs",
+    "inspect": "node scripts/inspect-binary.mjs",
+    "dev:ui": "vite",
+    "build:ui": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "icons": "node scripts/icons.mjs",
+    "test": "cargo test --manifest-path src-tauri/Cargo.toml",
+    "test:integration": "node scripts/integration.mjs",
+    "ui-preview": "npm run build:ui && node scripts/ui-preview.mjs"
+  },
+  "dependencies": {
+    "@fontsource/inter": "^5.3.0",
+    "@fontsource/sora": "^5.3.0",
+    "@tauri-apps/api": "^2.0.0"
+  },
+  "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
+    "@tauri-apps/cli": "^2.0.0",
+    "playwright-core": "^1.48.0",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.8"
+  }
+}
