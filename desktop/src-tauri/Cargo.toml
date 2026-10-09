@@ -26,11 +26,26 @@ rand = "0.8"
 open = "5"
 cpal = "0.15"
 nokhwa = { version = "0.10", features = ["input-native"] }
-image = { version = "0.25", default-features = false, features = ["jpeg"] }
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
+# DirectML runs the models on any DirectX 12 graphics card without a CUDA installation.
+ort = { version = "=2.0.0-rc.13", default-features = false, features = ["std", "download-binaries", "tls-native", "copy-dylibs", "api-27", "directml"] }
+rustfft = "6"
+symphonia = { version = "0.5", default-features = false, features = ["mp3", "flac", "vorbis", "ogg", "aac", "isomp4", "wav", "pcm"] }
 
 [profile.dev]
 # No debug info: much smaller build directory, and compile errors read the same.
 debug = 0
+
+# Same reason for the voice: the Fourier transform and the audio decoders run on every block.
+[profile.dev.package.rustfft]
+opt-level = 3
+
+[profile.dev.package.symphonia-bundle-mp3]
+opt-level = 3
+
+[profile.dev.package.app-desktop]
+# The picture loops of the face swap are several times too slow for live video when unoptimised.
+opt-level = 3
 
 [profile.release]
 # The shipped binary carries no symbol names and is optimised as one unit, which is what makes

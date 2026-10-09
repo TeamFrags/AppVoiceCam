@@ -184,6 +184,15 @@ impl ApiClient {
         self.adopt(pair, &mut *self.access.lock().await)
     }
 
+    /// Admin session handed out by a local API started with `npm run dev:test`. Compiled into
+    /// development builds only: a released binary does not contain this call.
+    #[cfg(debug_assertions)]
+    pub async fn dev_login(&self, device_name: &str) -> AppResult<()> {
+        let body = json!({ "deviceName": device_name });
+        let pair = self.send::<TokenPair>(Method::POST, "/v1/dev/login", Some(&body), None).await?;
+        self.adopt(pair, &mut *self.access.lock().await)
+    }
+
     /// Completes a Google or Discord sign-in started by `oauth::sign_in`.
     pub async fn exchange_oauth_code(
         &self,

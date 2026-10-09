@@ -8,8 +8,7 @@ html {
   color-scheme: dark;
 }
 html,
-body,
-#app {
+body {
   height: 100%;
 }
 
@@ -21,6 +20,8 @@ body {
   font: 15px/1.5 var(--brand-font-body);
   -webkit-font-smoothing: antialiased;
   user-select: none;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Two soft lights drifting behind the interface. */
@@ -49,8 +50,61 @@ body::after {
 }
 
 #app {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
+}
+
+/* ── Title bar: the window has no system one ── */
+.titlebar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding-left: 14px;
+  background: color-mix(in srgb, var(--brand-night) 82%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--brand-line) 45%, transparent);
+}
+/* What sits on the bar lets clicks through, so the window is dragged from anywhere on it. */
+.titlebar > :not(button) {
+  pointer-events: none;
+}
+.titlebar strong {
+  font: 700 0.85rem var(--brand-font-display);
+  letter-spacing: 0.02em;
+}
+.titlebar button {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 100%;
+  border: 0;
+  background: none;
+  color: var(--brand-haze);
+  cursor: pointer;
+  transition:
+    background 0.12s,
+    color 0.12s;
+}
+.titlebar svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.1;
+}
+.titlebar button:hover {
+  background: color-mix(in srgb, var(--brand-mist) 10%, transparent);
+  color: var(--brand-mist);
+}
+.titlebar button.close:hover {
+  background: var(--brand-danger);
+  color: var(--brand-night);
+}
+.titlebar button:focus-visible {
+  outline-offset: -2px;
 }
 
 h1,
@@ -280,39 +334,8 @@ select:disabled {
   background: color-mix(in srgb, var(--brand-danger) 12%, var(--brand-ink));
 }
 
-/* ── Top bar ── */
-.bar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 16px;
-  background: color-mix(in srgb, var(--brand-night) 70%, transparent);
-  backdrop-filter: blur(14px);
-  border-bottom: 1px solid color-mix(in srgb, var(--brand-line) 70%, transparent);
-}
-.bar strong {
-  font: 700 1.15rem var(--brand-font-display);
-}
 .spacer {
   flex: 1;
-}
-.chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  padding: 4px 12px 4px 4px;
-  border-radius: 999px;
-  border: 1px solid var(--brand-line);
-  background: color-mix(in srgb, var(--brand-ink) 70%, transparent);
-  font-size: 0.85rem;
-  color: var(--brand-haze);
-}
-.chip span:last-child {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 220px;
 }
 .avatar {
   display: grid;
@@ -344,20 +367,6 @@ select:disabled {
   box-shadow: 0 0 18px color-mix(in srgb, var(--brand-spirit) 45%, transparent);
 }
 
-/* ── Workspace ── */
-.workspace {
-  flex: 1;
-  display: grid;
-  grid-template-columns: 3fr 2fr;
-  grid-auto-rows: min-content;
-  gap: 16px;
-  padding: 16px;
-  overflow: auto;
-}
-.workspace .notice {
-  grid-column: 1 / -1;
-  margin: 0;
-}
 .card-head {
   display: flex;
   align-items: center;
@@ -484,6 +493,449 @@ select:disabled {
   transition: width 60ms linear;
 }
 
+/* ── Main screen: sidebar and content ── */
+.shell {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+}
+:where(.shell, .dialog) svg {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 12px 12px;
+  background: color-mix(in srgb, var(--brand-night) 60%, transparent);
+  backdrop-filter: blur(18px);
+  border-right: 1px solid color-mix(in srgb, var(--brand-line) 45%, transparent);
+}
+.nav {
+  display: grid;
+  gap: 4px;
+}
+.nav-item,
+.economy {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 12px;
+  background: none;
+  color: var(--brand-haze);
+  font: 600 0.92rem var(--brand-font-body);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+.nav-item:hover {
+  background: color-mix(in srgb, var(--brand-ink-raised) 60%, transparent);
+  color: var(--brand-mist);
+}
+.nav-item[aria-current] {
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--brand-spirit) 30%, transparent),
+    color-mix(in srgb, var(--brand-spirit) 6%, transparent)
+  );
+  color: var(--brand-mist);
+}
+.nav-item[aria-current]::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 22%;
+  bottom: 22%;
+  width: 3px;
+  border-radius: 3px;
+  background: var(--brand-gradient);
+}
+.economy {
+  gap: 10px;
+  font-size: 0.85rem;
+}
+.economy span {
+  flex: 1;
+  white-space: nowrap;
+}
+
+/* A checkbox drawn as a switch. */
+.switch {
+  appearance: none;
+  flex: none;
+  position: relative;
+  width: 38px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--brand-line);
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.switch::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--brand-mist);
+  transition: translate 0.2s;
+}
+.switch:checked {
+  background: var(--brand-success);
+}
+.switch:checked::after {
+  translate: 16px 0;
+  background: var(--brand-night);
+}
+.switch:focus {
+  box-shadow: none;
+}
+
+/* The account button and the menu it unrolls. */
+.account {
+  position: relative;
+  margin-top: 6px;
+  padding-top: 12px;
+  border-top: 1px solid color-mix(in srgb, var(--brand-line) 45%, transparent);
+}
+.account-button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--brand-line) 70%, transparent);
+  background: color-mix(in srgb, var(--brand-ink) 70%, transparent);
+  color: var(--brand-mist);
+  font: 0.85rem var(--brand-font-body);
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.account-button:hover,
+.account-button[aria-expanded='true'] {
+  border-color: color-mix(in srgb, var(--brand-mist) 35%, var(--brand-line));
+}
+.account-email {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+.account-button svg {
+  width: 16px;
+  height: 16px;
+  color: var(--brand-haze);
+  transition: rotate 0.2s;
+}
+.account-button[aria-expanded='false'] svg {
+  rotate: 180deg;
+}
+.menu {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% - 6px);
+  z-index: 5;
+  display: grid;
+  gap: 2px;
+  padding: 6px;
+  border-radius: 14px;
+  border: 1px solid var(--brand-line);
+  background: var(--brand-ink-raised);
+  box-shadow: 0 18px 48px rgb(0 0 0 / 0.55);
+}
+.menu-head {
+  padding: 6px 8px 8px;
+}
+.menu button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+  color: var(--brand-mist);
+  font: 0.88rem var(--brand-font-body);
+  text-align: left;
+  cursor: pointer;
+}
+.menu button:hover {
+  background: color-mix(in srgb, var(--brand-mist) 9%, transparent);
+}
+.menu button.danger {
+  color: var(--brand-danger);
+}
+.menu svg {
+  width: 17px;
+  height: 17px;
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+  padding: 20px 26px 28px;
+  overflow: auto;
+}
+.content h1 {
+  font-size: 1.45rem;
+  margin-bottom: 18px;
+}
+.content > .notice,
+.content > p {
+  margin: 0;
+}
+.view > p {
+  margin: 20px 0 0;
+}
+.search {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 46px;
+  padding: 0 16px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--brand-line) 80%, transparent);
+  background: color-mix(in srgb, var(--brand-ink) 70%, transparent);
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+.search:focus-within {
+  border-color: var(--brand-foxfire);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand-foxfire) 18%, transparent);
+}
+.search input,
+.search input:focus {
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  font-size: 0.95rem;
+}
+.view.split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 45%);
+  gap: 22px;
+  align-items: start;
+}
+
+/* ── Profiles: one circle each ── */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 20px 8px;
+  padding-top: 4px;
+}
+.tile {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.orb {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 50%;
+  background: var(--brand-ink-raised);
+  color: var(--brand-mist);
+  font: 700 1.5rem var(--brand-font-display);
+  text-transform: uppercase;
+  cursor: pointer;
+  box-shadow: 0 0 0 1px var(--brand-line);
+  transition:
+    translate 0.15s,
+    box-shadow 0.2s,
+    color 0.15s;
+}
+.orb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.orb.tinted {
+  background: linear-gradient(
+    135deg,
+    hsl(var(--hue) 75% 62%),
+    hsl(calc(var(--hue) + 50) 70% 42%)
+  );
+  color: var(--brand-night);
+}
+.orb:hover {
+  translate: 0 -2px;
+  box-shadow:
+    0 0 0 1px var(--brand-haze),
+    0 10px 24px rgb(0 0 0 / 0.4);
+}
+.tile.active .orb {
+  box-shadow:
+    0 0 0 3px var(--brand-night),
+    0 0 0 5px var(--brand-foxfire),
+    0 0 28px color-mix(in srgb, var(--brand-foxfire) 50%, transparent);
+}
+.tile.add .orb {
+  background: none;
+  color: var(--brand-haze);
+  box-shadow: none;
+  outline: 2px dashed var(--brand-line);
+  outline-offset: -2px;
+}
+.tile.add .orb:hover {
+  color: var(--brand-foxfire);
+  outline-color: var(--brand-foxfire);
+}
+.tile-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8rem;
+  color: var(--brand-haze);
+}
+.tile.active .tile-name {
+  color: var(--brand-mist);
+  font-weight: 600;
+}
+/* Deleting takes two clicks: the first one arms the button. */
+.tile-remove {
+  position: absolute;
+  top: -4px;
+  left: calc(50% + 20px);
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--brand-line);
+  background: var(--brand-ink-raised);
+  color: var(--brand-haze);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.tile-remove svg {
+  width: 12px;
+  height: 12px;
+}
+.tile:hover .tile-remove,
+.tile-remove:focus-visible,
+.tile-remove.armed {
+  opacity: 1;
+}
+.tile-remove.armed {
+  border-color: var(--brand-danger);
+  background: var(--brand-danger);
+  color: var(--brand-night);
+}
+
+.face-row {
+  align-items: center;
+  margin: 12px 0 0;
+}
+.face-row p {
+  flex: 1;
+  margin: 0;
+  font-size: 0.85rem;
+}
+.fine {
+  font-size: 0.8rem;
+}
+
+.settings {
+  display: grid;
+  gap: 12px;
+  max-width: 660px;
+}
+.setting {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+}
+.setting > div {
+  flex: 1;
+  min-width: 0;
+}
+.setting h2 {
+  margin: 0;
+}
+.setting p {
+  margin: 4px 0 0;
+  font-size: 0.88rem;
+  overflow-wrap: anywhere;
+}
+.setting select {
+  width: auto;
+}
+
+/* ── Dialogs: clone a face, clone a voice, new preset ── */
+.dialog {
+  width: min(430px, calc(100% - 32px));
+  padding: 24px;
+  border-radius: 18px;
+  border: 1px solid var(--brand-line);
+  background: var(--brand-ink);
+  color: var(--brand-mist);
+  box-shadow: 0 30px 80px rgb(0 0 0 / 0.6);
+}
+.dialog::backdrop {
+  background: color-mix(in srgb, var(--brand-night) 72%, transparent);
+  backdrop-filter: blur(5px);
+}
+.dialog .stack,
+.dialog .stack > * {
+  margin: 0;
+}
+.dialog h2 {
+  font-size: 1.2rem;
+}
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 6px;
+}
+.pick {
+  align-items: center;
+}
+.pick-preview {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--brand-foxfire);
+}
+
 .update {
   position: fixed;
   right: 16px;
@@ -513,6 +965,11 @@ select.language {
   color: var(--brand-haze);
   background: color-mix(in srgb, var(--brand-ink) 80%, transparent);
   backdrop-filter: blur(14px);
+}
+
+/* The main screen has its own language menu, in its settings. */
+body[data-screen='main'] select.language {
+  display: none;
 }
 
 [hidden] {
@@ -582,18 +1039,18 @@ select.language {
     animation: drift 28s ease-in-out infinite alternate-reverse;
   }
 
-  /* Each screen eases in; the panels of the workspace follow one another. */
+  /* Each screen, view and dialog eases in. */
   .center > *,
-  .bar,
-  .workspace > .card,
+  .view,
+  .dialog[open],
   .update {
     animation: rise 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
   }
-  .workspace > .card:nth-of-type(1) {
-    animation-delay: 0.06s;
+  .menu {
+    animation: rise 0.18s ease-out backwards;
   }
-  .workspace > .card:nth-of-type(2) {
-    animation-delay: 0.14s;
+  .orb.busy {
+    animation: pulse 0.9s ease-in-out infinite;
   }
   .logo-halo img {
     animation: float 5s ease-in-out infinite;
@@ -636,4 +1093,135 @@ select.language {
   * {
     transition: none !important;
   }
+}
+
+/* ── Choices in a card: camera filters, voice effects ── */
+.options {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin: 12px 0 0;
+}
+.options-label {
+  flex: none;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--brand-haze);
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.chip {
+  border: 1px solid var(--brand-line);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font: 600 0.82rem var(--brand-font-body);
+  background: color-mix(in srgb, var(--brand-ink-raised) 50%, transparent);
+  color: var(--brand-haze);
+  cursor: pointer;
+  transition:
+    color 0.15s,
+    background 0.15s,
+    border-color 0.15s;
+}
+.chip:hover {
+  color: var(--brand-mist);
+  border-color: color-mix(in srgb, var(--brand-mist) 35%, var(--brand-line));
+}
+.chip[aria-checked='true'] {
+  color: var(--brand-mist);
+  border-color: var(--brand-foxfire);
+  background: color-mix(in srgb, var(--brand-foxfire) 16%, transparent);
+}
+
+/* Icon-only button, as tall as the button beside it. */
+.btn.square {
+  display: grid;
+  place-items: center;
+  padding: 0 12px;
+}
+.monitor-row {
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 0;
+}
+.monitor-row p {
+  margin: 0;
+}
+#monitor {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.btn[aria-pressed='true'] {
+  border-color: var(--brand-foxfire);
+  background: color-mix(in srgb, var(--brand-foxfire) 16%, transparent);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--brand-foxfire) 25%, transparent);
+}
+
+/* ── Floating camera window ── */
+.pip {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--brand-line);
+  background: var(--brand-night);
+}
+/* Clicks go through to the window, which is dragged from anywhere. */
+.pip img,
+.pip p {
+  pointer-events: none;
+}
+.pip img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.pip p {
+  margin: 0;
+}
+.pip-close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--brand-night) 75%, transparent);
+  color: var(--brand-mist);
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity 0.15s,
+    background 0.15s;
+}
+.pip-close svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+}
+.pip:hover .pip-close,
+.pip-close:focus-visible {
+  opacity: 1;
+}
+.pip-close:hover {
+  background: var(--brand-danger);
+}
+.options + p {
+  margin-top: 14px;
 }

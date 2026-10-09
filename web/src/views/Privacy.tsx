@@ -33,6 +33,16 @@ export const privacy: View = {
           </ul>
           <p>{t.noMedia}</p>
 
+          <h2>{t.basisTitle}</h2>
+          <ul>
+            {t.basis.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+
+          <h2>{t.recipientsTitle}</h2>
+          <p>{t.recipients}</p>
+
           <h2 id="cookies">{t.cookiesTitle}</h2>
           <div className="table-wrap">
             <table>

@@ -5,7 +5,10 @@ import './brand/tokens.css';
 import './style.css';
 import { brand } from './brand/tokens';
 import { chooseLanguage, fmt, LANGUAGE_NAMES, locale, t } from './i18n';
-import { bridge, errorMessage, isAppError, type Account, type Device } from './bridge';
+import { getCurrentWindow } from '@tauri-apps/api/window';
+import { bridge, errorMessage, isAppError, type Account } from './bridge';
+import { mountPip } from './pip';
+import { mountWorkspace } from './workspace';
 
 const root = document.querySelector<HTMLDivElement>('#app')!;
 document.title = brand.name;
@@ -16,20 +19,14 @@ let accountTimer: number | undefined;
 /** Replaces the screen. Markup passed here is static; dynamic text is set through the DOM. */
 function render(markup: string): void {
   window.clearInterval(accountTimer);
+  // The main screen says so itself: it has its own language menu, in its settings.
+  document.body.dataset.screen = 'entry';
   root.innerHTML = markup;
 }
 
 const $ = <T extends HTMLElement>(selector: string) => root.querySelector<T>(selector)!;
 
 const logo = `<div class="logo-halo"><img src="/mascot.svg" alt="" /></div>`;
-const icon = (path: string) =>
-  `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${path}" /></svg>`;
-const cameraIcon = icon(
-  'M4 7h10a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2ZM16 10.5l6-3.5v10l-6-3.5',
-);
-const micIcon = icon(
-  'M12 3a3 3 0 0 1 3 3v5a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3ZM5 11a7 7 0 0 0 14 0M12 18v3',
-);
 
 function showLoading(): void {
   render(
@@ -161,201 +158,24 @@ async function signInWithProvider(provider: string, label: string): Promise<void
   }
 }
 
-function fillSelect(select: HTMLSelectElement, devices: Device[], empty: string): void {
-  select.replaceChildren();
-  if (devices.length === 0) {
-    select.append(new Option(empty, ''));
-    select.disabled = true;
-    return;
-  }
-  for (const device of devices) select.append(new Option(device.name, device.id));
-  select.disabled = false;
-}
-
 function showMain(account: Account): void {
-  render(`
-    <header class="bar">
-      <img src="/mascot.svg" alt="" width="36" height="36" />
-      <strong id="name" class="gradient-text"></strong>
-      <span class="spacer"></span>
-      <span class="chip"><span class="avatar" id="avatar" aria-hidden="true"></span><span id="email"></span></span>
-      <span class="badge" id="tier"></span>
-      <button class="btn ghost small" id="logout">${t.signOut}</button>
-    </header>
-    <main class="workspace">
-      <p class="notice" id="notice" hidden role="alert"></p>
-      <section class="card">
-        <div class="card-head">${cameraIcon}<h2>${t.camera}</h2><span class="status" id="camera-status"></span></div>
-        <div class="row">
-          <select id="camera" aria-label="${t.camera}"></select>
-          <button class="btn" id="camera-toggle">${t.start}</button>
-        </div>
-        <div class="preview">
-          <img id="frame" alt="${t.cameraPreview}" hidden />
-          <span class="live-badge" id="live" hidden>${t.live}</span>
-          <p class="muted" id="frame-empty">${t.previewIdle}</p>
-        </div>
-        <p class="muted stat" id="camera-stat">&nbsp;</p>
-      </section>
-      <section class="card">
-        <div class="card-head">${micIcon}<h2>${t.microphone}</h2><span class="status" id="mic-status"></span></div>
-        <div class="row">
-          <select id="mic" aria-label="${t.microphone}"></select>
-          <button class="btn" id="mic-toggle">${t.start}</button>
-        </div>
-        <div class="meter" role="meter" aria-label="${t.micLevel}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="meter">
-          <div id="meter-fill"></div>
-        </div>
-        <p class="muted">
-          ${t.versionNote}
-        </p>
-      </section>
-    </main>`);
-
-  $('#name').textContent = brand.name;
-  $('#email').textContent = account.email;
-  $('#avatar').textContent = account.email.charAt(0);
-  const tier = $('#tier');
-  const showTier = (value: Account['tier']) => {
-    tier.textContent = value === 'premium' ? 'Premium' : t.free;
-    tier.classList.toggle('premium', value === 'premium');
-  };
-  showTier(account.tier);
-
-  /** Shows a capture as running or stopped: its status label and its start/stop button. */
-  const showState = (status: HTMLElement, toggle: HTMLButtonElement, on: boolean) => {
-    status.textContent = on ? t.live : t.stopped;
-    status.classList.toggle('on', on);
-    toggle.textContent = on ? t.stop : t.start;
-    toggle.classList.toggle('stop', on);
-  };
-
-  const notice = $<HTMLParagraphElement>('#notice');
-  const warn = (err: unknown) => {
-    if (handleSessionError(err)) return;
-    notice.textContent = errorMessage(err);
-    notice.hidden = false;
-  };
-
-  // ── Camera
-  const cameraSelect = $<HTMLSelectElement>('#camera');
-  const cameraToggle = $<HTMLButtonElement>('#camera-toggle');
-  const frame = $<HTMLImageElement>('#frame');
-  const frameEmpty = $('#frame-empty');
-  const cameraStat = $('#camera-stat');
-  let cameraOn = false;
-  let frames = 0;
-  let fpsSince = performance.now();
-
-  const setCamera = (on: boolean) => {
-    cameraOn = on;
-    showState($('#camera-status'), cameraToggle, on);
-    $('.preview').classList.toggle('on', on);
-    $('#live').hidden = !on;
-    cameraSelect.disabled = on || cameraSelect.options[0]?.value === '';
-    if (!on) {
-      frame.hidden = true;
-      frameEmpty.hidden = false;
-      cameraStat.innerHTML = '&nbsp;';
-    }
-  };
-  cameraToggle.addEventListener('click', async () => {
-    notice.hidden = true;
-    try {
-      if (cameraOn) await bridge.stopCamera();
-      else await bridge.startCamera(cameraSelect.value);
-      setCamera(!cameraOn);
-    } catch (err) {
-      warn(err);
-    }
+  render('');
+  const workspace = mountWorkspace(root, account, {
+    sessionError: handleSessionError,
+    signOut: async () => {
+      workspace.leave();
+      await bridge.signOut().catch(() => undefined);
+      void showLogin();
+    },
   });
-
-  // ── Microphone
-  const micSelect = $<HTMLSelectElement>('#mic');
-  const micToggle = $<HTMLButtonElement>('#mic-toggle');
-  const meter = $('#meter');
-  const meterFill = $('#meter-fill');
-  let micOn = false;
-
-  const setMeter = (level: number) => {
-    const percent = Math.round(Math.min(1, level) * 100);
-    meterFill.style.width = `${percent}%`;
-    meter.setAttribute('aria-valuenow', String(percent));
-  };
-  const setMic = (on: boolean) => {
-    micOn = on;
-    showState($('#mic-status'), micToggle, on);
-    micSelect.disabled = on || micSelect.options[0]?.value === '';
-    if (!on) setMeter(0);
-  };
-  micToggle.addEventListener('click', async () => {
-    notice.hidden = true;
-    try {
-      if (micOn) await bridge.stopMicrophone();
-      else await bridge.startMicrophone(micSelect.value);
-      setMic(!micOn);
-    } catch (err) {
-      warn(err);
-    }
-  });
-
-  // ── Events from the native side. Listeners are dropped when this screen goes away.
-  const unlisten = [
-    bridge.onCameraFrame((payload) => {
-      if (!cameraOn) return;
-      frame.src = `data:image/jpeg;base64,${payload.jpeg}`;
-      frame.hidden = false;
-      frameEmpty.hidden = true;
-      frames += 1;
-      const elapsed = performance.now() - fpsSince;
-      if (elapsed >= 1000) {
-        const fps = Math.round((frames * 1000) / elapsed);
-        cameraStat.textContent = fmt(t.previewStat, {
-          width: payload.width,
-          height: payload.height,
-          fps,
-        });
-        frames = 0;
-        fpsSince = performance.now();
-      }
-    }),
-    bridge.onMicLevel((level) => micOn && setMeter(level)),
-    bridge.onCaptureEnded((source) => {
-      if (source === 'camera') setCamera(false);
-      else setMic(false);
-      notice.textContent = source === 'camera' ? t.cameraEnded : t.micEnded;
-      notice.hidden = false;
-    }),
-  ];
-  const leave = () =>
-    unlisten.forEach((pending) => void pending.then((off) => [off].flat().forEach((f) => f())));
-
-  setCamera(false);
-  setMic(false);
-
-  $('#logout').addEventListener('click', async () => {
-    leave();
-    await bridge.signOut().catch(() => undefined);
-    void showLogin();
-  });
-
-  bridge
-    .listDevices()
-    .then((devices) => {
-      fillSelect(cameraSelect, devices.cameras, t.noCamera);
-      fillSelect(micSelect, devices.microphones, t.noMicrophone);
-      cameraToggle.disabled = devices.cameras.length === 0;
-      micToggle.disabled = devices.microphones.length === 0;
-    })
-    .catch(warn);
 
   // The server decides: a ban, a revoked session or a new plan is picked up here.
   accountTimer = window.setInterval(async () => {
     try {
-      showTier((await bridge.account()).tier);
+      workspace.showTier((await bridge.account()).tier);
     } catch (err) {
       if (isAppError(err) && (err.code === 'account_banned' || err.code === 'not_signed_in')) {
-        leave();
+        workspace.leave();
         handleSessionError(err);
       }
     }
@@ -411,7 +231,34 @@ async function watchForUpdates(): Promise<void> {
   document.body.append(banner);
 }
 
-/** Language menu, outside #app like the update banner: it is there on every screen. */
+/**
+ * The window has no system title bar: this one replaces it on every screen. The window is
+ * dragged by it, and double-clicking it maximizes the window as usual.
+ */
+function showTitleBar(): void {
+  const bar = document.createElement('header');
+  bar.className = 'titlebar';
+  bar.dataset.tauriDragRegion = '';
+  bar.innerHTML = `
+    <img src="/mascot.svg" alt="" width="20" height="20" />
+    <strong class="gradient-text"></strong>
+    <span class="spacer"></span>
+    <button data-do="minimize" aria-label="${t.minimize}"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6h8" /></svg></button>
+    <button data-do="maximize" aria-label="${t.maximize}"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 2.5h7v7h-7z" /></svg></button>
+    <button data-do="close" class="close" aria-label="${t.close}"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7" /></svg></button>`;
+  bar.querySelector('strong')!.textContent = brand.name;
+  const actions: Record<string, () => Promise<void>> = {
+    minimize: () => getCurrentWindow().minimize(),
+    maximize: () => getCurrentWindow().toggleMaximize(),
+    close: () => getCurrentWindow().close(),
+  };
+  for (const button of bar.querySelectorAll<HTMLButtonElement>('button')) {
+    button.addEventListener('click', () => void actions[button.dataset.do!]?.());
+  }
+  document.body.prepend(bar);
+}
+
+/** Language menu of the screens before the main one, outside #app like the update banner. */
 function showLanguagePicker(): void {
   const picker = document.createElement('select');
   picker.className = 'language';
@@ -424,6 +271,12 @@ function showLanguagePicker(): void {
 }
 
 document.documentElement.lang = locale;
-void start();
-void watchForUpdates();
-showLanguagePicker();
+// The same page serves both windows: the floating one only shows the camera.
+if (getCurrentWindow().label === 'pip') {
+  mountPip(root);
+} else {
+  showTitleBar();
+  void start();
+  void watchForUpdates();
+  showLanguagePicker();
+}

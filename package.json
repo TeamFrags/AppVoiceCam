@@ -10,6 +10,7 @@
   ],
   "scripts": {
     "dev": "npm run dev -w backend",
+    "dev:test": "node scripts/dev-test.mjs",
     "test": "npm run test -w backend",
     "typecheck": "npm run typecheck -w backend && npm run typecheck -w web && npm run typecheck -w desktop",
     "lint": "eslint .",

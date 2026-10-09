@@ -28,6 +28,12 @@ const schema = z.object({
     .enum(['true', 'false'])
     .default('false')
     .transform((v) => v === 'true'),
+  // `npm run dev:test` only: opens an admin session to anyone who asks, with no password.
+  // loadConfig refuses it outside a development server listening on this machine alone.
+  DEV_AUTO_LOGIN: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
 });
 
 export type Config = z.infer<typeof schema>;
@@ -44,6 +50,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   // An empty line such as `GOOGLE_CLIENT_ID=` in an env file means "not set".
   const defined = Object.fromEntries(Object.entries(env).filter(([, value]) => value !== ''));
   const config = schema.parse(defined);
+  if (config.DEV_AUTO_LOGIN) {
+    const local = ['127.0.0.1', 'localhost', '::1'].includes(config.HOST);
+    if (config.NODE_ENV !== 'development' || !local) {
+      throw new Error('DEV_AUTO_LOGIN is only allowed in development, on a loopback HOST');
+    }
+  }
   if (config.NODE_ENV === 'production') {
     const missing: string[] = REQUIRED_IN_PRODUCTION.filter((key) => !config[key]);
     // The development defaults for these would put localhost links in real emails.

@@ -37,7 +37,16 @@ function stub(scenario) {
   const account = { email: 'toi@exemple.com', tier: scenario.tier ?? 'free' };
   window.__emit = (event, payload) =>
     (listeners[event] ?? []).forEach((cb) => cb({ event, payload }));
+  // One dark pixel stands in for every portrait.
+  const pixel =
+    '/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=';
+  let profiles = 0;
+  const profile = (name, picture = null) => ({ id: `p${++profiles}`, name, picture });
   window.__TAURI_INTERNALS__ = {
+    metadata: {
+      currentWindow: { label: scenario.window ?? 'main' },
+      currentWebview: { label: scenario.window ?? 'main' },
+    },
     transformCallback(callback) {
       const id = nextId++;
       window[`_${id}`] = callback;
@@ -65,6 +74,15 @@ function stub(scenario) {
           microphones: [{ id: 'Micro', name: 'Microphone (Realtek(R) Audio)' }],
         };
       }
+      if (command === 'list_library') {
+        return {
+          faces: ['Nova', 'Atlas', 'Mika'].map((name) => profile(name, pixel)),
+          voices: ['Narrator', 'Robot', 'Luna', 'Deep'].map((name) => profile(name)),
+        };
+      }
+      if (command === 'clone_face') return profile(args.name, pixel);
+      if (command === 'import_voice' || command === 'save_voice_sample') return profile(args.name);
+      if (command === 'stop_voice_sample') return 7.4;
       return null;
     },
   };
@@ -73,12 +91,16 @@ function stub(scenario) {
 const browser = await chromium.launch({ channel: 'msedge', headless: true });
 const problems = [];
 async function shoot(name, scenario, act) {
-  const page = await browser.newPage({ viewport: { width: 980, height: 700 } });
+  const page = await browser.newPage({
+    viewport: { width: scenario.width ?? 1180, height: scenario.height ?? 760 },
+  });
   page.on('pageerror', (err) => problems.push(`${name}: ${err}`));
   await page.addInitScript(stub, scenario);
   await page.goto('http://localhost:1421/');
   await page.waitForTimeout(400);
   if (act) await act(page);
+  // Transitions and entrance animations are left to finish.
+  await page.waitForTimeout(600);
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth - window.innerWidth,
   );
@@ -95,11 +117,82 @@ try {
     await page.click('#submit');
     await page.waitForSelector('#error:not([hidden])');
   });
-  await shoot('main', { signedIn: true, tier: 'premium' }, async (page) => {
-    await page.click('#mic-toggle');
-    await page.evaluate(() => window.__emit('mic-level', 0.62));
-    await page.waitForTimeout(200);
+  const signedIn = { signedIn: true, tier: 'premium' };
+  const open = (page, view) => page.click(`.nav-item[data-view=${view}]`);
+  // A one-pixel PNG stands in for a photo: the stub accepts any picture.
+  const photo = {
+    name: 'Photo de moi.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+      'base64',
+    ),
+  };
+
+  await shoot('face', signedIn, async (page) => {
+    await open(page, 'face');
+    await page.click('#face-grid .tile:nth-child(3) .orb');
+    await page.waitForSelector('#face-grid .tile:nth-child(3).active');
+    await page.click('#filters .chip[data-value=cat]');
   });
+  await shoot('face-clone', signedIn, async (page) => {
+    await open(page, 'face');
+    await page.click('#face-grid .tile.add .orb');
+    await page.setInputFiles('#face-file', photo);
+    await page.waitForSelector('#face-picked:not([hidden])');
+  });
+  await shoot('voice', signedIn, async (page) => {
+    await open(page, 'voice');
+    await page.click('#voice-grid .tile:nth-child(4) .orb');
+    // The monitor starts the microphone along with it.
+    await page.click('#monitor');
+    await page.waitForSelector('#mic-toggle.stop');
+    await page.click('#effects .chip[data-value=robot]');
+    await page.evaluate(() => window.__emit('mic-level', 0.62));
+  });
+  await shoot('voice-clone', signedIn, async (page) => {
+    await open(page, 'voice');
+    await page.click('#voice-grid .tile.add .orb');
+    await page.click('#record');
+    await page.evaluate(() => window.__emit('mic-level', 0.5));
+    await page.click('#record');
+    await page.fill('#voice-dialog [name=name]', 'Ma voix');
+  });
+  await shoot('presets', signedIn, async (page) => {
+    // A preset is made of the face and the voice selected at that moment, then found again.
+    await open(page, 'face');
+    await page.click('#face-grid .tile:nth-child(3) .orb');
+    await open(page, 'voice');
+    await page.click('#voice-grid .tile:nth-child(3) .orb');
+    await open(page, 'presets');
+    await page.click('#preset-grid .tile.add .orb');
+    await page.fill('#preset-dialog [name=name]', 'Stream');
+    await page.click('#preset-dialog [data-save]');
+    await page.waitForSelector('#preset-grid .tile.active');
+    await page.fill('#search', 'str');
+  });
+  await shoot('account-menu', signedIn, async (page) => {
+    await page.click('#account-button');
+    await page.waitForSelector('#account-menu:not([hidden])');
+  });
+  await shoot('settings', signedIn, async (page) => {
+    await open(page, 'settings');
+    await page.click('.setting .economy-toggle');
+  });
+  await shoot('face-narrow', { ...signedIn, width: 960 }, (page) => open(page, 'face'));
+  const floating = { window: 'pip', width: 384, height: 216 };
+  await shoot('pip-idle', floating);
+  await shoot('pip', floating, (page) =>
+    page.evaluate(() => {
+      // A plain colour stands in for a camera frame.
+      const canvas = Object.assign(document.createElement('canvas'), { width: 64, height: 36 });
+      const context = canvas.getContext('2d');
+      context.fillStyle = '#3b6ea5';
+      context.fillRect(0, 0, 64, 36);
+      const jpeg = canvas.toDataURL('image/jpeg').split(',')[1];
+      window.__emit('camera-frame', { jpeg, width: 64, height: 36, swapped: false });
+    }),
+  );
   await shoot('banned', { banned: true });
 } finally {
   await browser.close();

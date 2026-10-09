@@ -8,7 +8,7 @@
     "pt": "Mude de rosto. Mude de voz.",
     "de": "Neues Gesicht. Neue Stimme."
   },
-  "mascotName": "Kibi",
+  "mascotName": "Foxy",
   "colors": {
     "ember": { "hex": "#FF6B2C", "label": "Ember", "role": "Primaire : boutons d'action" },
     "emberDeep": { "hex": "#D9480F", "label": "Ember Deep", "role": "Survol, état pressé" },

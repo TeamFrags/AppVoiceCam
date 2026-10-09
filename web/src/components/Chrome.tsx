@@ -2,7 +2,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { localePath, type Locale } from '@/i18n/config';
 import { getMessages } from '@/i18n/index';
-import { brand, PUBLIC_PAGES } from '@/lib/site';
+import { brand, FOOTER_PAGES, PUBLIC_PAGES } from '@/lib/site';
 import { AccountLink } from './AccountLink';
 import { ManageCookiesButton } from './CookieConsent';
 import { LanguageSwitcher } from './LanguageSwitcher';
@@ -38,7 +38,11 @@ export function Footer({ locale }: { locale: Locale }) {
         <span>
           © {new Date().getFullYear()} {brand.name}
         </span>
-        <Link href={localePath(locale, '/privacy/')}>{t.footer.privacy}</Link>
+        {FOOTER_PAGES.map((page) => (
+          <Link key={page.href} href={localePath(locale, page.href)}>
+            {t.footer[page.key]}
+          </Link>
+        ))}
         <ManageCookiesButton />
       </div>
     </footer>

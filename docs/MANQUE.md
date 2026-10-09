@@ -25,15 +25,42 @@ Rien de ceci ne peut être fait à ta place : ce sont des comptes, des achats ou
 
 ## 2. Les trois vrais obstacles techniques
 
-Ce sont les parties difficiles du produit. Aucune n'est commencée.
+Ce sont les parties difficiles du produit. Seul le visage est commencé.
 
 ### Les modèles d'IA
 
-Le logiciel n'a aucun modèle : il ne transforme encore ni visage ni voix.
+Le changement de visage fonctionne depuis le 9 octobre 2026 (`desktop/src-tauri/src/face.rs`) :
+on choisit une photo, le visage est remplacé sur la caméra ou sur une photo d'essai. Les trois
+modèles (745 Mo) s'installent avec `npm run models -w desktop`. Mesuré sur la RTX 3060 :
+environ 65 ms par image en 1280 × 720, soit une quinzaine d'images par seconde.
 
-- **Licences.** Le modèle de visage utilisé par Deep-Live-Cam (`inswapper`) est publié pour un
-  usage non commercial. Le vendre dans un abonnement demande une licence commerciale, ou un autre
-  modèle. Même question pour les modèles de voix. C'est à trancher avant d'écrire le pipeline.
+Le clonage de voix fonctionne depuis le 9 octobre 2026 (`desktop/src-tauri/src/voice.rs`) : on
+choisit une voix de la bibliothèque, et le micro est rejoué avec cette voix dans le retour audio.
+Deux modèles d'OpenVoice V2 (160 Mo, licence MIT), installés par la même commande. Mesuré sur la
+RTX 3060 : 20 à 60 ms de calcul par bloc de 93 ms, soit environ 250 ms de retard au total ; le
+mode économie double les blocs (environ 350 ms) pour deux fois moins de calcul. Sur le
+processeur seul, le modèle est trop lent pour le direct.
+
+- **Clonage.** Depuis le 9 octobre 2026, le logiciel garde une bibliothèque locale
+  (`desktop/src-tauri/src/library.rs`) : un visage cloné est son portrait, une voix clonée est
+  son enregistrement de référence (micro ou fichier), et un preset associe les deux. Le visage
+  cloné et la voix clonée sont réellement appliqués. Les effets de voix (grave, robot…) sont du
+  traitement du signal, pas du clonage : ils s'ajoutent après la voix clonée.
+- **Un second moteur de voix, plus ressemblant, reste à ajouter.** OpenVoice change le timbre
+  mais garde la hauteur et l'intonation de celui qui parle : une voix d'homme vers une voix de
+  femme reste peu convaincante. Les modèles plus fidèles (MeanVC 2, Apache-2.0 ; X-VC, licence à
+  vérifier) ne sont pas publiés en ONNX : il faut les exporter depuis PyTorch, donc installer
+  Python, qui n'est pas sur ce PC. `voice.rs` est écrit pour qu'un autre moteur se branche à la
+  place du premier (le trait `Converter`).
+- **VoiceStudio et Deep-Live-Cam ne peuvent pas être intégrés tels quels.** Les deux sont sous
+  licence AGPL-3.0 : les embarquer obligerait à publier tout le code du logiciel. VoiceStudio est
+  de plus une application Electron avec un serveur Python et PyTorch (5 Go au moins), et il
+  génère de la parole à partir d'un texte : il ne transforme pas une voix en direct. Le visage
+  utilise déjà les mêmes modèles que Deep-Live-Cam, réécrits en Rust, sans son code.
+- **Licences.** Les modèles de visage (`inswapper` et `buffalo_l`, ceux de Deep-Live-Cam) sont
+  publiés pour un usage non commercial uniquement. Ils conviennent tant que le projet ne rapporte
+  rien ; les vendre dans un abonnement demanderait une licence commerciale ou d'autres modèles.
+  Les modèles de voix (OpenVoice V2) sont sous licence MIT : ils peuvent être vendus.
 - **Qui fournit les visages et les voix du catalogue**, et avec quels droits (accord écrit de
   chaque personne dont le visage ou la voix est proposé).
 - **Moteur d'inférence** : ONNX Runtime avec la carte graphique (ta RTX 3060 convient pour
@@ -58,8 +85,9 @@ licence (type VB-Cable, déjà présent sur ton PC avec VoiceMeeter) en négocia
 | Phase | Manque |
 | --- | --- |
 | 2 — Logiciel, capture | Fait : connexion obligatoire, Google/Discord, capture caméra et micro avec aperçu. Manque : choix de la résolution, profils de performance, statistiques processeur / carte graphique / mémoire, réglages persistants |
-| 3 — Visage temps réel | Tout (voir « modèles d'IA ») |
-| 4 — Voix temps réel | Tout |
+| 3 — Visage temps réel | Fait : visage choisi depuis une photo, appliqué à la caméra et à une photo d'essai, sur la carte graphique (DirectML) avec repli sur le processeur. Manque : essai avec une vraie caméra (aucune sur ce PC), plusieurs visages à la fois, netteté (le modèle travaille en 128 × 128), vitesse (15 images/s), `DirectML.dll` à joindre à l'installateur, visages servis par le serveur |
+| 3 bis — Filtres et fenêtre flottante | Fait : filtres posés sur le visage (lunettes, chat, chien) et sur toute l'image (noir et blanc, sépia), dessinés par le cœur à partir des repères du détecteur, sans fichier image (`filters.rs`) ; fenêtre flottante toujours au premier plan qui montre la caméra. Manque : filtres à base d'images ou de 3D, plusieurs visages, suivi de la bouche et des yeux (le détecteur ne donne que 5 points) |
+| 4 — Voix temps réel | Fait : voix clonée à partir d'un enregistrement (`voice.rs`), retour audio (le micro rejoué sur le casque) et cinq effets sans modèle (`effects.rs`). Tout cela ne s'entend que dans le retour audio tant qu'il n'y a pas de micro virtuel. Manque : un second moteur plus ressemblant pour les PC puissants, le réglage de la hauteur, le choix de la sortie audio, le volume du retour, les modèles servis par le serveur |
 | 5 — Caméra et micro virtuels | Tout (voir ci-dessus) |
 | 6 — Modèles servis par le serveur | Catalogue, versions, téléchargement signé et vérifié, cache, reprise, stockage Cloudflare R2 |
 | 7 — Premium | Stripe : paiement, webhooks, annulation, échecs de paiement. La table et le calcul des droits existent déjà |
@@ -70,7 +98,7 @@ licence (type VB-Cable, déjà présent sur ton PC avec VoiceMeeter) en négocia
 | 12 — Mise en production | Fait : mises à jour automatiques signées, publiées par GitHub (voir [deployment.md](deployment.md)). Manque : déploiement progressif, mise à jour forcée, retour arrière, configuration à distance, rapports de plantage, sauvegardes de la base |
 
 Aussi absents : aucune version macOS ou Linux. Le site est en anglais, français, espagnol,
-portugais et allemand, le logiciel aussi (anglais par défaut, menu de langue en bas à gauche).
+portugais et allemand, le logiciel aussi (anglais par défaut, menu de langue dans les réglages, et en bas à gauche avant la connexion).
 Ces traductions n'ont pas été relues par des natifs. Les e-mails envoyés par l'API sont encore
 en français uniquement.
 
@@ -81,7 +109,12 @@ en français uniquement.
 | Connexion Google et Discord | Tout le parcours côté serveur avec un faux fournisseur (15 tests) ; le serveur local du logiciel qui reçoit le code | Un vrai aller-retour chez Google ou Discord : il faut les identifiants |
 | Capture caméra | Le code compile ; l'encodage de l'aperçu est testé | **Aucune caméra n'est détectée sur ce PC** : la capture n'a jamais tourné |
 | Capture micro | Trois micros sont bien listés ; le calcul du niveau est testé | Le micro n'a pas été ouvert pendant les tests (volontairement) |
-| Fenêtre du logiciel | Elle s'ouvre ; chaque écran a été affiché dans un navigateur avec un faux moteur | Personne n'a encore cliqué dans la vraie fenêtre |
+| Fenêtre du logiciel | Chaque écran a été affiché dans un navigateur avec un faux moteur (`npm run ui-preview -w desktop`) | Personne n'a encore cliqué dans la vraie fenêtre. Depuis qu'elle a sa propre barre de titre, ni son déplacement, ni son redimensionnement, ni ses trois boutons n'ont été essayés |
+| Clonage de voix | L'enregistrement en mono et son fichier WAV sont testés | Aucun enregistrement réel depuis un micro |
+| Voix clonée | Convertie par blocs en ligne de commande (`cargo run --example voice`), sur des voix de synthèse Windows et sur l'enregistrement de la bibliothèque : le timbre mesuré se rapproche bien de la référence (0,46 → 0,88 sur 1), plus vite que le temps réel | **Personne n'a encore écouté le résultat**, ni les raccords entre blocs. Jamais essayée avec un vrai micro, ni en même temps que le changement de visage, qui occupe déjà la carte graphique |
+| Retour audio et effets | Chaque effet est testé sur des sons de synthèse (hauteur, délai de l'écho, bande de la radio), ainsi que la file entre micro et casque | **Personne ne les a encore écoutés** : ni le rendu des effets, ni le délai du retour, ni l'ouverture d'une vraie sortie audio |
+| Filtres de caméra | Les formes sont testées et ont été regardées sur un visage schématique | Jamais sur un vrai visage ni avec une caméra |
+| Fenêtre flottante | Son contenu a été affiché dans un navigateur ; le logiciel compile avec ses droits réduits | La fenêtre n'a jamais été ouverte : premier plan, déplacement, redimensionnement, fermeture avec la fenêtre principale |
 | Scripts du VPS | Syntaxe ; installation de l'archive simulée sur le PC | Jamais exécutés sur le serveur |
 | PostgreSQL et Redis réels | — | Tous les tests tournent sur une base embarquée et un store mémoire |
 | Envoi d'e-mails | Le texte des messages | Aucun envoi réel |

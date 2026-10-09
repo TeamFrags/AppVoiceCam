@@ -99,6 +99,10 @@ nom ou de domaine : reconstruire et renvoyer.
   ajouter une règle de cache pour le domaine du site, et purger le cache après chaque envoi.
 - **Les cookies de Cloudflare.** La page Confidentialité annonce deux cookies. Si une option
   Cloudflare en dépose d'autres (protection anti-robots par exemple), les y ajouter.
+- **Le pays des visiteurs.** Le tableau de bord lit le pays dans l'en-tête `CF-IPCountry` que
+  Cloudflare ajoute aux requêtes vers l'API (Network → IP Geolocation, activé par défaut).
+  L'adresse IP n'est pas enregistrée. Sans cet en-tête, donc aussi en local, les visiteurs
+  apparaissent « Non localisé ».
 
 ### Cookies et mesure d'audience
 

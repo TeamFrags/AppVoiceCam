@@ -14,10 +14,11 @@
       {
         "label": "main",
         "title": "Kitsuvox",
-        "width": 980,
-        "height": 700,
-        "minWidth": 820,
-        "minHeight": 600
+        "width": 1180,
+        "height": 760,
+        "minWidth": 960,
+        "minHeight": 640,
+        "decorations": false
       }
     ],
     "security": {

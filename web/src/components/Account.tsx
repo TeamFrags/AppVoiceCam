@@ -10,6 +10,7 @@ import { api, ApiError, errorMessage, signOut } from '@/lib/api';
 
 interface Me {
   email: string;
+  role: 'user' | 'admin';
 }
 interface Entitlements {
   tier: 'free' | 'premium';
@@ -148,9 +149,16 @@ export function Account() {
           </ul>
         </div>
 
-        <button type="button" className="btn ghost" onClick={leave}>
-          {t.account.signOut}
-        </button>
+        <div className="actions">
+          {me.role === 'admin' && (
+            <Link href={localePath(locale, '/admin/')} className="btn">
+              {t.admin.title}
+            </Link>
+          )}
+          <button type="button" className="btn ghost" onClick={leave}>
+            {t.account.signOut}
+          </button>
+        </div>
       </div>
     </section>
   );

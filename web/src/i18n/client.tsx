@@ -7,7 +7,7 @@ import type { Messages } from './messages/en';
 /** Only what interactive components display: the rest of the texts never reaches the browser twice. */
 export type ClientMessages = Pick<
   Messages,
-  'nav' | 'footer' | 'auth' | 'account' | 'consent' | 'errors'
+  'nav' | 'footer' | 'auth' | 'creatorForm' | 'account' | 'admin' | 'consent' | 'errors'
 >;
 
 const I18nContext = createContext<{ locale: Locale; t: ClientMessages } | null>(null);

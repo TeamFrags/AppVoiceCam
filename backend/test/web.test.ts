@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { purgeOldPageViews } from '../src/modules/analytics.js';
+import { purgeOldCreatorApplications } from '../src/modules/creators.js';
 import { createTestContext, PASSWORD, type TestContext } from './helpers.js';
 
 let ctx: TestContext;
@@ -75,6 +76,120 @@ describe('browser sessions', () => {
   });
 });
 
+describe('admin dashboard', () => {
+  it('counts visitors, views and accounts per period, for admins only', async () => {
+    const admin = await ctx.signUp('admin@example.com');
+    const user = await ctx.signUp('user@example.com');
+    await ctx.db.query(`update users set role = 'admin' where id = $1`, [admin.userId]);
+    const [alice, bob] = [randomUUID(), randomUUID()];
+    await ctx.post('/v1/analytics/pageview', { visitorId: alice, path: '/' });
+    await ctx.post('/v1/analytics/pageview', { visitorId: alice, path: '/faq/' });
+    await ctx.post('/v1/analytics/pageview', { visitorId: bob, path: '/' });
+    await ctx.db.query(
+      `update page_views set created_at = now() - interval '10 days' where visitor_id = $1`,
+      [bob],
+    );
+
+    expect((await ctx.get('/v1/admin/overview', user.accessToken)).status).toBe(403);
+    const { body } = await ctx.get('/v1/admin/overview', admin.accessToken);
+    expect(body.visitors).toEqual({ day: 1, week: 1, month: 2, year: 2 });
+    expect(body.views).toEqual({ day: 2, week: 2, month: 3, year: 3 });
+    expect(body.signups.day).toBe(2);
+    expect(body.accounts).toEqual({ total: 2, verified: 2, premium: 0, activeToday: 2 });
+  });
+
+  it('lists accounts with their active sanction, searchable, for admins only', async () => {
+    const admin = await ctx.signUp('admin@example.com');
+    const user = await ctx.signUp('user@example.com');
+    await ctx.db.query(`update users set role = 'admin' where id = $1`, [admin.userId]);
+
+    expect((await ctx.get('/v1/admin/users', user.accessToken)).status).toBe(403);
+    expect((await ctx.get('/v1/admin/users', admin.accessToken)).body.users).toHaveLength(2);
+    expect((await ctx.get('/v1/admin/users?banned=1', admin.accessToken)).body.users).toEqual([]);
+
+    await ctx.post(
+      `/v1/admin/users/${user.userId}/ban`,
+      { kind: 'suspension', reason: 'Spam', durationHours: 24 },
+      admin.accessToken,
+    );
+    const banned = await ctx.get('/v1/admin/users?banned=1', admin.accessToken);
+    expect(banned.body.users).toMatchObject([
+      {
+        id: user.userId,
+        email: 'user@example.com',
+        role: 'user',
+        verified: true,
+        premium: false,
+        ban: { kind: 'suspension', reason: 'Spam' },
+      },
+    ]);
+    expect(banned.body.users[0].ban.until).toBeTypeOf('string');
+
+    const found = await ctx.get('/v1/admin/users?search=ADMIN', admin.accessToken);
+    expect(found.body.users).toMatchObject([{ email: 'admin@example.com', ban: null }]);
+  });
+});
+
+describe('creator program', () => {
+  const application = {
+    name: 'Kibi',
+    email: 'kibi@example.com',
+    platform: 'twitch',
+    channelUrl: 'https://twitch.tv/kibi',
+    message: 'I stream every evening.',
+    locale: 'fr',
+  };
+  const apply = (body: object) => ctx.post('/v1/creators/apply', body);
+  const stored = async () => (await ctx.db.query('select * from creator_applications')).rows;
+
+  it('stores an application with only what the applicant typed', async () => {
+    expect((await apply(application)).status).toBe(202);
+    const rows = await stored();
+    expect(rows).toHaveLength(1);
+    expect(Object.keys(rows[0]!).sort()).toEqual(
+      ['channel_url', 'created_at', 'email', 'id', 'locale', 'message', 'name', 'platform'].sort(),
+    );
+  });
+
+  it('refuses an incomplete application or a link that is not a web address', async () => {
+    const bad = await apply({ ...application, channelUrl: 'javascript:alert(1)' });
+    expect(bad).toMatchObject({ status: 400, body: { error: 'invalid_application' } });
+    expect((await apply({ ...application, email: 'nope' })).status).toBe(400);
+    expect(await stored()).toHaveLength(0);
+  });
+
+  it('answers a robot like a person but stores nothing', async () => {
+    expect((await apply({ ...application, website: 'https://spam.test' })).status).toBe(202);
+    expect(await stored()).toHaveLength(0);
+  });
+
+  it('lists applications to admins only', async () => {
+    const admin = await ctx.signUp('admin@example.com');
+    const user = await ctx.signUp('user@example.com');
+    await ctx.db.query(`update users set role = 'admin' where id = $1`, [admin.userId]);
+    await apply(application);
+
+    expect((await ctx.get('/v1/admin/creators/applications', user.accessToken)).status).toBe(403);
+    const list = await ctx.get('/v1/admin/creators/applications', admin.accessToken);
+    expect(list.body.applications).toHaveLength(1);
+    expect(list.body.applications[0]).toMatchObject({
+      email: 'kibi@example.com',
+      channelUrl: 'https://twitch.tv/kibi',
+    });
+  });
+
+  it('purges applications older than the retention period', async () => {
+    await apply(application);
+    await apply({ ...application, email: 'old@example.com' });
+    await ctx.db.query(
+      `update creator_applications set created_at = now() - interval '13 months'
+        where email = 'old@example.com'`,
+    );
+    await purgeOldCreatorApplications(ctx.db);
+    expect((await stored()).map((row) => row.email)).toEqual(['kibi@example.com']);
+  });
+});
+
 describe('audience measurement', () => {
   const view = (body: object) => ctx.post('/v1/analytics/pageview', body);
 
@@ -86,8 +201,32 @@ describe('audience measurement', () => {
     const rows = (await ctx.db.query('select * from page_views')).rows;
     expect(rows).toHaveLength(1);
     expect(Object.keys(rows[0]!).sort()).toEqual(
-      ['created_at', 'id', 'path', 'referrer_host', 'visitor_id'].sort(),
+      ['country', 'created_at', 'id', 'path', 'referrer_host', 'visitor_id'].sort(),
     );
+  });
+
+  it('keeps the country the proxy worked out, never the address', async () => {
+    const send = (country: string) =>
+      ctx.app.inject({
+        method: 'POST',
+        url: '/v1/analytics/pageview',
+        payload: { visitorId: randomUUID(), path: '/' },
+        headers: { 'cf-ipcountry': country },
+      });
+    await send('fr');
+    await send('FR');
+    await send('XX');
+    await send('not a country');
+    await view({ visitorId: randomUUID(), path: '/' });
+
+    const admin = await ctx.signUp('admin@example.com');
+    await ctx.db.query(`update users set role = 'admin' where id = $1`, [admin.userId]);
+    const { body } = await ctx.get('/v1/admin/analytics/pageviews?days=7', admin.accessToken);
+    expect(body.countries).toEqual([
+      { country: null, visitors: 3 },
+      { country: 'FR', visitors: 2 },
+    ]);
+    expect(body.hours).toEqual([{ hour: new Date().getUTCHours(), views: 5 }]);
   });
 
   it('refuses paths that carry a query string, so one-time tokens are never stored', async () => {
@@ -110,6 +249,21 @@ describe('audience measurement', () => {
     expect(report.body.daily).toHaveLength(1);
     expect(report.body.daily[0]).toMatchObject({ views: 3, visitors: 2 });
     expect(report.body.topPages[0]).toEqual({ path: '/', views: 2 });
+  });
+
+  it('reports new accounts per day, and how many existed before, to admins only', async () => {
+    const admin = await ctx.signUp('admin@example.com');
+    const user = await ctx.signUp('user@example.com');
+    const old = await ctx.signUp('old@example.com');
+    await ctx.db.query(`update users set role = 'admin' where id = $1`, [admin.userId]);
+    await ctx.db.query(`update users set created_at = now() - interval '40 days' where id = $1`, [
+      old.userId,
+    ]);
+
+    expect((await ctx.get('/v1/admin/analytics/accounts', user.accessToken)).status).toBe(403);
+    const { body } = await ctx.get('/v1/admin/analytics/accounts?days=30', admin.accessToken);
+    expect(body.before).toBe(1);
+    expect(body.daily).toEqual([{ day: new Date().toISOString().slice(0, 10), signups: 2 }]);
   });
 
   it('purges views older than the retention period', async () => {

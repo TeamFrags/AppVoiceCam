@@ -19,6 +19,10 @@ export const en = {
   },
   footer: {
     privacy: 'Privacy',
+    terms: 'Terms',
+    refunds: 'Refunds',
+    support: 'Support',
+    creators: 'Creators',
     cookies: 'Manage cookies',
   },
   home: {
@@ -210,8 +214,19 @@ export const en = {
     collect: [
       '<b>Your account</b>: email address and password (stored only as a hash, never in plain text).',
       '<b>Your sign-ins</b>: device name, IP address and date, to show you your active sessions and detect a suspicious sign-in.',
-      '<b>Website audience measurement</b>, only if you accept it: pages visited and referring site, linked to an anonymous identifier.',
+      '<b>Website audience measurement</b>, only if you accept it: pages visited, referring site, date and time of the visit, and country (worked out from your IP address, which is not stored), linked to an anonymous identifier.',
+      '<b>Sign-in with Google or Discord</b>, if you choose it: the email address and the account identifier that service gives us. We never receive your password.',
+      '<b>Creator program applications</b>: the name, email address, channel link and message you type in the form.',
     ],
+    basisTitle: 'Why we are allowed to use them',
+    basis: [
+      'Account and sign-ins: to provide the service you signed up for, and for our legitimate interest in keeping accounts secure.',
+      'Audience measurement: your consent, which you can withdraw at any time.',
+      'Creator applications: to answer a request you made, before any partnership.',
+    ],
+    recipientsTitle: 'Who receives them',
+    recipients:
+      'Your data is never sold. It is only handled by the providers that host the service and deliver our emails, on our instructions.',
     noMedia:
       'We collect neither your camera image nor your microphone audio: the transformation happens on your PC.',
     cookiesTitle: 'Cookies',
@@ -232,10 +247,199 @@ export const en = {
     retention: [
       'Account: until it is deleted.',
       'Audience measurement: 25 months, then deleted automatically.',
+      'Creator applications: 12 months, then deleted automatically.',
     ],
     rightsTitle: 'Your rights',
     rights:
       'You can ask to access, correct, delete or export your data by writing to <mail>{email}</mail>. You can also lodge a complaint with your data protection authority (in France, the CNIL: cnil.fr).',
+  },
+  legal: {
+    updated: 'Last updated: {date}',
+  },
+  terms: {
+    title: 'Terms of use',
+    description:
+      'The rules for using {name}: your account, what is allowed, Premium and your rights.',
+    sections: [
+      {
+        title: 'The service',
+        body: [
+          '{name} is a Windows app that changes your face and your voice live and sends them to your other apps as an ordinary camera and microphone. These terms apply as soon as you create an account or use the app or this website.',
+          'The app is still in development: features can change, appear or be removed.',
+        ],
+      },
+      {
+        title: 'Your account',
+        body: [
+          'You need an account to use the app. Give an email address you can read, keep your password to yourself, and tell us quickly if you think someone else is using your account.',
+          'You must be at least 15 years old. If you are under 18, you need the agreement of a parent or guardian.',
+        ],
+      },
+      {
+        title: 'What is allowed',
+        body: [
+          'Use only faces and voices you have the right to use. Custom faces and cloned voices require the permission of the person they belong to.',
+          'It is forbidden to pass yourself off as a real person to deceive, harass, defraud or harm someone, to create illegal content, or to get around the limits of your plan or the protections of the app.',
+          'You remain responsible for following the rules of the apps and games you use {name} with.',
+        ],
+      },
+      {
+        title: 'Free and Premium',
+        body: [
+          'The free plan gives access to a selection of faces and voices. Premium costs {price} per month and unlocks the rest. Subscriptions are not open yet: the price and the conditions will be shown before any payment.',
+          'Cancellations and refunds are covered by our <refunds>refund policy</refunds>.',
+        ],
+      },
+      {
+        title: 'Suspension and closing your account',
+        body: [
+          'If these terms are broken, we can suspend or ban the account. The reason is shown when you try to sign in, and you can contest it by writing to <mail>{email}</mail>.',
+          'You can ask us to delete your account at any time at the same address.',
+        ],
+      },
+      {
+        title: 'Ownership',
+        body: [
+          'The app, its catalogue of faces and voices, the brand and this website belong to us. Your account gives you a personal right to use them, which you cannot resell or transfer.',
+          'What you create with {name} stays yours.',
+        ],
+      },
+      {
+        title: 'Availability and liability',
+        body: [
+          'We do our best to keep the service running, but we cannot promise it will never be interrupted. We are not liable for how a third-party app or game reacts to the virtual camera or microphone.',
+          'Nothing in these terms removes the rights the law gives you as a consumer, including the legal guarantee of conformity.',
+        ],
+      },
+      {
+        title: 'Changes to these terms',
+        body: [
+          'If we change something important, we tell you by email or on this website before it applies. If you disagree, you can close your account.',
+        ],
+      },
+      {
+        title: 'Law and contact',
+        body: [
+          'These terms are governed by French law. If you live in another country of the European Union, you keep the protection of the mandatory rules of your country.',
+          'A question or a complaint? Write to <mail>{email}</mail> or see the <support>support page</support>. How we handle your data is described on the <privacy>privacy page</privacy>.',
+        ],
+      },
+    ],
+  },
+  refunds: {
+    title: 'Refund policy',
+    description: 'When and how to get a {name} Premium payment refunded.',
+    sections: [
+      {
+        title: 'In short',
+        body: [
+          'The free plan costs nothing, so there is nothing to refund. Premium subscriptions are not open yet: this policy applies from the day they open.',
+        ],
+      },
+      {
+        title: '14 days to change your mind',
+        body: [
+          'You have 14 days from your first Premium payment to ask for a full refund, without giving a reason.',
+        ],
+      },
+      {
+        title: 'Cancelling and renewals',
+        body: [
+          'You can cancel whenever you want. Premium then stays active until the end of the period already paid, and no further payment is taken.',
+          'A period that has started is not refunded in part, except in the cases below or where the law requires it.',
+        ],
+      },
+      {
+        title: 'Payment taken by mistake',
+        body: [
+          'A payment taken twice, or taken after you cancelled, is refunded in full.',
+          'If Premium stops working because of us for a long time, write to us: we refund the time lost.',
+        ],
+      },
+      {
+        title: 'How to ask',
+        body: [
+          'Write to <mail>{email}</mail> from the email address of your account, with the date of the payment. We answer by email, and an accepted refund is sent back to the payment method you used within 14 days.',
+          'See also the <terms>terms of use</terms>.',
+        ],
+      },
+    ],
+  },
+  support: {
+    title: 'Support',
+    description: 'Get help with {name}: account, installation, subscription and your data.',
+    lead: 'A problem or a question? Write to us, a person will read your message.',
+    faq: 'Many answers are already in the <a>FAQ</a>.',
+    emailButton: 'Write to {email}',
+    topicsTitle: 'To get a faster answer',
+    topics: [
+      {
+        title: 'Account and sign-in',
+        text: 'Write from the email address of your account and tell us what you see on screen. We never ask for your password.',
+      },
+      {
+        title: 'A bug in the app',
+        text: 'Tell us your Windows version, your graphics card, the app or game you use {name} with, and what you were doing when it happened.',
+      },
+      {
+        title: 'Subscription and refunds',
+        text: 'Give the date of the payment. The rules are in the <refunds>refund policy</refunds>.',
+      },
+      {
+        title: 'Your data',
+        text: 'To access, correct, export or delete your data, a simple email is enough: we answer within one month. Details on the <privacy>privacy page</privacy>.',
+      },
+    ],
+  },
+  creators: {
+    title: 'Creator program',
+    description:
+      'Streamers and video creators: get {name} Premium for free and early access to new faces and voices.',
+    badge: 'Creator program',
+    heading: 'You create, <b>we give you Premium</b>.',
+    lead: 'You stream or make videos? Join the {name} creator program and get everything the app can do, for free.',
+    cta: 'Apply',
+    offerTitle: 'What we give creators',
+    offers: [
+      {
+        title: 'Premium for free',
+        text: 'Every face, every voice, custom faces and voice cloning, for as long as you are in the program. Starts the day Premium opens.',
+      },
+      {
+        title: 'New things before everyone else',
+        text: 'Try new faces and voices early and tell us what you think of them.',
+      },
+      {
+        title: 'A direct line to the team',
+        text: 'A question, an idea, a problem in the middle of a stream? You talk to us directly.',
+      },
+    ],
+    whoTitle: 'Who can apply',
+    who: [
+      'You publish regularly on Twitch, YouTube, TikTok, Kick or elsewhere',
+      'You reach a minimum audience: we share the exact criteria privately, in our reply',
+      'Your content follows the rules of the platform you publish on',
+      'You are at least 18 years old',
+    ],
+    rulesTitle: 'What we ask in return',
+    rules: [
+      'Say clearly to your audience that you got Premium for free when you show {name}',
+      'Follow the <terms>terms of use</terms>: never pass yourself off as a real person to deceive',
+      'Nothing else: no quota of videos, no script to read',
+    ],
+    formTitle: 'Apply',
+    formLead: 'We read every application and reply by email. Not every application is accepted.',
+  },
+  creatorForm: {
+    name: 'Name or handle',
+    platform: 'Main platform',
+    other: 'Other',
+    channelUrl: 'Link to your channel',
+    message: 'Tell us about your content (optional)',
+    submit: 'Send my application',
+    done: 'Application received. We reply by email.',
+    notice:
+      'We only use these details to review your application and reply to you. They are deleted after 12 months. <a>Learn more</a>',
   },
   auth: {
     signInTitle: 'Sign in',
@@ -261,6 +465,69 @@ export const en = {
     verifyTitle: 'Email confirmation',
     verifying: 'Checking…',
     verified: 'Address confirmed. You can sign in.',
+    signInLead: 'Welcome back. Your faces and voices are waiting.',
+    registerLead: 'Free, and ready in under a minute.',
+    registerDoneTitle: 'Check your inbox',
+    showPassword: 'Show password',
+    hidePassword: 'Hide password',
+    showcaseTitle: 'A new face, a new voice, <b>live</b>.',
+    perks: [
+      'Free to start, no bank card needed',
+      'Works with Discord and your games',
+      'Your image and voice never leave your PC',
+    ],
+    statUsers: 'users',
+    statApps: 'compatible apps',
+    statLocal: 'processed on your PC',
+  },
+  admin: {
+    title: 'Dashboard',
+    live: 'Live, refreshed every 15 seconds',
+    forbidden: 'This page is reserved for administrators.',
+    periods: { day: '24 hours', week: '7 days', month: '30 days', year: '12 months' },
+    visitors: 'Visitors',
+    views: 'Page views',
+    signups: 'New accounts',
+    applications: 'Creator applications',
+    accounts: 'Accounts',
+    verified: 'Verified accounts',
+    activeToday: 'Active in the last 24 hours',
+    premium: 'Premium subscribers',
+    total: 'over the period',
+    topPages: 'Most viewed pages',
+    topReferrers: 'Where visitors come from',
+    none: 'Nothing yet.',
+    sections: {
+      overview: 'Overview',
+      audience: 'Audience',
+      accounts: 'Accounts',
+      creators: 'Creators',
+    },
+    traffic: 'Website traffic',
+    growth: 'Number of accounts over time',
+    countries: 'Visitor countries',
+    hours: 'Visiting hours',
+    hoursNote: 'Page views by hour of the day, in your time zone.',
+    unknownCountry: 'Not located',
+    locationNote:
+      'The country is worked out from the IP address at the time of the visit; the address itself is never stored.',
+    search: 'Search an email',
+    bannedOnly: 'Sanctioned only',
+    roleAdmin: 'Admin',
+    unverified: 'Unverified',
+    joined: 'Joined {date}',
+    lastSeen: 'last seen {date}',
+    banned: 'Banned',
+    suspendedUntil: 'Suspended until {date}',
+    ban: 'Ban',
+    unban: 'Lift the sanction',
+    sanction: 'Sanction',
+    permanent: 'Permanent ban',
+    suspension: 'Suspension, {period}',
+    reason: 'Reason (shown to the person)',
+    confirm: 'Confirm',
+    cancel: 'Cancel',
+    consentNote: 'Visitors and page views only count people who accepted audience measurement.',
   },
   account: {
     title: 'My account',
@@ -305,6 +572,8 @@ export const en = {
     account_banned: 'This account is banned or suspended.',
     suspended: 'Account suspended until {date}. Reason: {reason}',
     banned: 'Account banned. Reason: {reason}',
+    invalid_application:
+      'Check the fields: a name, a valid email and a link to your channel starting with https://.',
     generic: 'Something went wrong. Try again later.',
   },
 };

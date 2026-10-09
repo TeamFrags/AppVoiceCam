@@ -14,11 +14,20 @@ import { ScrollReveal } from './ScrollReveal';
 /** The whole document around a page. Each root layout renders it in its own language. */
 export function SiteShell({ locale, children }: { locale: Locale; children: ReactNode }) {
   const t = getMessages(locale);
-  const { nav, footer, auth, account, consent, errors } = t;
+  const { nav, footer, auth, creatorForm, account, admin, consent, errors } = t;
   return (
     <html lang={locale}>
       <body>
-        <I18nProvider locale={locale} messages={{ nav, footer, auth, account, consent, errors }}>
+        <I18nProvider
+          locale={locale}
+          messages={{ nav, footer, auth, creatorForm, account, admin, consent, errors }}
+        >
+          {/* Soft coloured glow drifting behind every page. */}
+          <div className="ambient" aria-hidden="true">
+            <i />
+            <i />
+            <i />
+          </div>
           <a href="#content" className="skip-link">
             {nav.skip}
           </a>

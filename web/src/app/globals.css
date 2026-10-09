@@ -22,6 +22,62 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* ── Lueur ──
+   --glow est la couleur de lueur d'un élément ; déclarée comme couleur, elle peut être animée.
+   --angle fait tourner le liseré des cartes de formulaire. */
+@property --glow {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: transparent;
+}
+@property --angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+.hero-art,
+.auth-card,
+.card.premium::after,
+.after .demo-screen,
+.consent {
+  --glow: var(--brand-spirit);
+}
+/* Halos de couleur derrière toutes les pages. */
+.ambient {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+.ambient i {
+  position: absolute;
+  width: 70vmax;
+  height: 70vmax;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--c) 20%, transparent),
+    transparent 62%
+  );
+}
+.ambient i:nth-child(1) {
+  --c: var(--brand-spirit);
+  top: -30vmax;
+  left: -20vmax;
+}
+.ambient i:nth-child(2) {
+  --c: var(--brand-foxfire);
+  top: 10vmax;
+  right: -35vmax;
+}
+.ambient i:nth-child(3) {
+  --c: var(--brand-ember);
+  bottom: -45vmax;
+  left: 15vmax;
+  opacity: 0.7;
+}
+
 h1,
 h2,
 h3 {
@@ -30,6 +86,9 @@ h3 {
   letter-spacing: -0.02em;
   margin: 0 0 0.5em;
   text-wrap: balance;
+  /* Un mot plus large que l'écran (allemand) se coupe au lieu de faire défiler la page. */
+  overflow-wrap: break-word;
+  hyphens: auto;
 }
 h1 {
   font-size: clamp(2.2rem, 6vw, 4rem);
@@ -96,6 +155,16 @@ section {
   background: color-mix(in srgb, var(--brand-night) 88%, transparent);
   backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--brand-line);
+}
+/* Filet lumineux sous l'en-tête. */
+.site-header::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 -1px;
+  height: 1px;
+  background: var(--brand-gradient);
+  background-size: 200% 100%;
+  opacity: 0.7;
 }
 .site-header .container {
   display: flex;
@@ -269,7 +338,7 @@ section {
   border-radius: 50%;
   background: radial-gradient(
     circle,
-    color-mix(in srgb, var(--brand-spirit) 60%, transparent),
+    color-mix(in srgb, var(--glow) 60%, transparent),
     color-mix(in srgb, var(--brand-foxfire) 20%, transparent) 55%,
     transparent 72%
   );
@@ -379,8 +448,8 @@ section {
   height: 100%;
 }
 .after .demo-screen {
-  border-color: var(--brand-spirit);
-  box-shadow: 0 0 40px color-mix(in srgb, var(--brand-spirit) 30%, transparent);
+  border-color: var(--glow);
+  box-shadow: 0 0 40px color-mix(in srgb, var(--glow) 30%, transparent);
 }
 /* Sans animation, seul le premier visage est montré. */
 .demo-faces svg ~ svg {
@@ -439,7 +508,18 @@ section {
   padding: 24px;
 }
 .card.premium {
+  position: relative;
   border-color: var(--brand-spirit);
+}
+/* La lueur est sur un calque à part : la carte garde ses propres transitions au survol. */
+.card.premium::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border: 1px solid var(--glow);
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: 0 0 50px -16px color-mix(in srgb, var(--glow) 60%, transparent);
 }
 .card > :last-child {
   margin-bottom: 0;
@@ -522,35 +602,319 @@ details p {
 
 /* ── Formulaires ── */
 .auth {
+  width: 100%;
   max-width: 440px;
   margin: 0 auto;
 }
+.auth-card {
+  position: relative;
+  padding: 32px;
+  border: 1px solid var(--brand-line);
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--brand-ink) 92%, transparent);
+  box-shadow: 0 0 70px -18px color-mix(in srgb, var(--glow) 55%, transparent);
+}
+/* Liseré lumineux qui fait le tour de la carte. */
+.auth-card::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  padding: 1px;
+  border-radius: inherit;
+  pointer-events: none;
+  background: conic-gradient(
+    from var(--angle),
+    transparent 0 55%,
+    var(--brand-foxfire),
+    var(--brand-spirit),
+    var(--brand-ember),
+    transparent
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box exclude,
+    linear-gradient(#000 0 0);
+}
+.auth-card h1 {
+  font-size: 1.8rem;
+}
+.auth-card > :last-child {
+  margin-bottom: 0;
+}
+.auth-card form .btn {
+  width: 100%;
+}
+.auth-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  justify-content: space-between;
+  margin: 18px 0 0;
+  font-size: 0.95rem;
+}
 .field {
-  display: block;
   margin-bottom: 16px;
 }
-.field span {
-  display: block;
-  font-size: 0.9rem;
-  margin-bottom: 6px;
+.field-box {
+  position: relative;
 }
-.field input {
+.field :is(input, textarea, select) {
   width: 100%;
-  padding: 12px 14px;
-  border-radius: 10px;
+  padding: 23px 14px 8px;
+  border-radius: 12px;
   border: 1px solid var(--brand-line);
   background: var(--brand-night);
   color: var(--brand-mist);
   font: inherit;
 }
+.field textarea {
+  display: block;
+  min-height: 120px;
+  resize: vertical;
+}
+.field :is(input, textarea, select):focus {
+  outline: none;
+  border-color: var(--brand-foxfire);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand-foxfire) 18%, transparent);
+}
+.field input[autocomplete$='password'] {
+  padding-right: 48px;
+}
+/* Edge ajoute son propre œil : le nôtre suffit. */
+.field input::-ms-reveal {
+  display: none;
+}
+.field label {
+  position: absolute;
+  top: 16px;
+  left: 15px;
+  right: 15px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--brand-haze);
+  pointer-events: none;
+  transform-origin: left top;
+}
+.field input[autocomplete$='password'] + label {
+  right: 48px;
+}
+.field :is(input, textarea):focus + label,
+.field :is(input, textarea):not(:placeholder-shown) + label,
+.field select + label {
+  transform: translateY(-11px) scale(0.76);
+}
+/* Règle à part : un navigateur qui ne connaît pas :autofill ignorerait toute la liste. */
+.field input:autofill + label {
+  transform: translateY(-11px) scale(0.76);
+}
+.field :is(input, textarea, select):focus + label {
+  color: var(--brand-foxfire);
+}
+.field input:autofill {
+  -webkit-text-fill-color: var(--brand-mist);
+  box-shadow: 0 0 0 100px var(--brand-night) inset;
+  caret-color: var(--brand-mist);
+}
+.field-toggle {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  translate: 0 -50%;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--brand-haze);
+  cursor: pointer;
+}
+.field-toggle:hover,
+.field-toggle[aria-pressed='true'] {
+  color: var(--brand-foxfire);
+}
+.field-toggle svg,
+.chip svg,
+.done-mark {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+/* Longueur du mot de passe par rapport au minimum demandé. */
+.meter {
+  display: block;
+  height: 4px;
+  margin-top: 8px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--brand-line);
+}
+.meter::after {
+  content: '';
+  display: block;
+  width: calc(var(--fill) * 100%);
+  height: 100%;
+  border-radius: inherit;
+  background: var(--brand-warning);
+}
+.meter[data-ok]::after {
+  background: var(--brand-success);
+}
+.btn[data-busy]::after {
+  content: '';
+  width: 16px;
+  height: 16px;
+  margin-left: 10px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+}
 .providers {
   display: grid;
   gap: 10px;
 }
+.providers .btn {
+  gap: 10px;
+}
 .divider {
-  text-align: center;
+  display: flex;
+  align-items: center;
+  gap: 12px;
   margin: 4px 0 12px;
   font-size: 0.9rem;
+}
+.divider::before,
+.divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--brand-line);
+}
+/* Piège à robots : hors de l'écran, hors de la navigation au clavier. */
+.trap {
+  position: absolute;
+  left: -9999px;
+}
+.form-note {
+  margin: 14px 0 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+/* Une ancre ne doit pas se cacher sous l'en-tête fixe. */
+.anchor {
+  scroll-margin-top: 72px;
+}
+.auth-card h2 {
+  font-size: 1.6rem;
+}
+.done-mark {
+  display: block;
+  margin-bottom: 16px;
+  color: var(--brand-success);
+  stroke-width: 3;
+  stroke-dasharray: 1;
+}
+
+/* Connexion et inscription : le formulaire à droite, ce qu'on y gagne à gauche. */
+.auth-split {
+  display: grid;
+  grid-template-columns: 1fr minmax(0, 440px);
+  gap: 56px;
+  align-items: center;
+}
+.auth-split .auth {
+  margin: 0;
+}
+.showcase-art {
+  max-width: 220px;
+  justify-self: start;
+  margin-bottom: 20px;
+}
+.chip {
+  position: absolute;
+  top: 8%;
+  right: -22%;
+  display: flex;
+  align-items: center;
+  height: 44px;
+  padding: 10px 14px;
+  border: 1px solid var(--brand-line);
+  border-radius: 999px;
+  color: var(--brand-foxfire);
+  background: color-mix(in srgb, var(--brand-ink) 80%, transparent);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 10px 30px rgb(0 0 0 / 0.35);
+}
+.chip.bars {
+  top: auto;
+  right: auto;
+  bottom: 10%;
+  left: -18%;
+  gap: 4px;
+}
+.chip.bars i {
+  width: 4px;
+  background: linear-gradient(var(--brand-foxfire), var(--brand-spirit));
+}
+.showcase-title {
+  max-width: 14em;
+  margin-bottom: 0.6em;
+  font: 700 clamp(1.7rem, 3.2vw, 2.4rem) / 1.15 var(--brand-font-display);
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+.perks {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 28px;
+  padding: 0;
+  list-style: none;
+  color: var(--brand-haze);
+}
+.perks li {
+  position: relative;
+  padding-left: 1.7em;
+}
+.perks li::before {
+  content: '✓';
+  position: absolute;
+  left: 0;
+  font-weight: 600;
+  color: var(--brand-foxfire);
+}
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+.stats div {
+  display: flex;
+  flex-direction: column;
+  padding: 14px 16px;
+  border: 1px solid var(--brand-line);
+  border-radius: var(--brand-radius);
+  background: color-mix(in srgb, var(--brand-ink) 70%, transparent);
+}
+.stats dt {
+  font-size: 0.85rem;
+  line-height: 1.3;
+  color: var(--brand-haze);
+}
+.stats dd {
+  /* Le chiffre s'affiche au-dessus de son libellé. */
+  order: -1;
+  margin: 0;
+  font: 700 1.7rem / 1.3 var(--brand-font-display);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 .notice {
   padding: 12px 14px;
@@ -585,6 +949,373 @@ details p {
   border-bottom: 0;
 }
 
+/* ── Tableau de bord ── */
+.admin-page {
+  padding-top: 32px;
+}
+.admin-shell {
+  display: grid;
+  grid-template-columns: 232px minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+  width: 100%;
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+/* La barre latérale reste en vue sous l'en-tête pendant que la page défile. */
+.admin-side {
+  position: sticky;
+  top: 88px;
+  display: grid;
+  gap: 16px;
+  padding: 16px 12px;
+  border: 1px solid var(--brand-line);
+  border-radius: var(--brand-radius);
+  background: var(--brand-ink);
+}
+.admin-side-title {
+  margin: 0;
+  padding: 0 12px;
+  font: 700 1.05rem var(--brand-font-display);
+}
+.admin-side nav {
+  display: grid;
+  gap: 4px;
+}
+.admin-side nav button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: var(--brand-haze);
+  font: inherit;
+  font-size: 0.95rem;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.admin-side nav button:hover {
+  color: var(--brand-mist);
+  background: color-mix(in srgb, var(--brand-mist) 6%, transparent);
+}
+.admin-side nav button[aria-current] {
+  color: var(--brand-mist);
+  background: var(--brand-ink-raised);
+  box-shadow: inset 3px 0 0 var(--brand-foxfire);
+}
+.admin-side .icon {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  margin: 0;
+  border-radius: 0;
+  background: none;
+  color: inherit;
+}
+.admin-side [aria-current] .icon {
+  color: var(--brand-foxfire);
+}
+.admin-side .count {
+  margin-left: auto;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--brand-mist) 12%, transparent);
+  color: var(--brand-mist);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+.admin-side .live {
+  padding: 14px 12px 0;
+  border-top: 1px solid var(--brand-line);
+  margin: 0;
+  color: var(--brand-haze);
+  font-size: 0.8rem;
+  font-weight: 400;
+  line-height: 1.4;
+}
+.admin-side .live::before {
+  flex: none;
+}
+.admin {
+  /* Teintes des séries : le cyan de la marque est assombri pour rester lisible à côté du violet,
+     y compris pour les daltoniens. */
+  --chart-1: color-mix(in srgb, var(--brand-foxfire) 70%, var(--brand-night));
+  --chart-2: var(--brand-spirit);
+  display: grid;
+  /* minmax(0, …) : un tableau large défile dans sa carte au lieu d'élargir la page. */
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
+.admin h1 {
+  margin: 0;
+  font-size: 1.8rem;
+}
+@media (max-width: 900px) {
+  .admin-shell {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+  /* Sur petit écran, la barre latérale devient une rangée d'onglets qui défile. */
+  .admin-side {
+    position: static;
+    padding: 6px;
+  }
+  .admin-side nav {
+    display: flex;
+    overflow-x: auto;
+  }
+  .admin-side nav button[aria-current] {
+    box-shadow: none;
+  }
+  .admin-side :is(.admin-side-title, .live) {
+    display: none;
+  }
+}
+.admin .stats dd {
+  color: var(--brand-mist);
+}
+.admin th[scope='row'] {
+  font-weight: 400;
+  color: var(--brand-haze);
+}
+.admin td {
+  font-variant-numeric: tabular-nums;
+}
+.users-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+}
+.users-filter .field {
+  flex: 1 1 240px;
+  margin: 0;
+}
+.tag {
+  margin-left: 10px;
+}
+.sanction {
+  color: var(--brand-danger);
+}
+/* Le formulaire s'ouvre sous la ligne du compte, sur toute la largeur. */
+.ban-form {
+  flex: 1 1 100%;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+.ban-form .field {
+  margin: 0;
+}
+.ban-form .actions {
+  grid-column: 1 / -1;
+}
+.chart-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+  justify-content: space-between;
+}
+.chart-head :is(h1, h2) {
+  margin: 0;
+}
+.segmented {
+  display: flex;
+  padding: 3px;
+  border: 1px solid var(--brand-line);
+  border-radius: 999px;
+}
+.segmented button {
+  padding: 5px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--brand-haze);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.segmented button[aria-pressed='true'] {
+  background: var(--brand-ink-raised);
+  color: var(--brand-mist);
+}
+.chart-readout {
+  margin: 12px 0 8px;
+}
+.chart-readout strong {
+  font: 700 1.7rem var(--brand-font-display);
+  font-variant-numeric: tabular-nums;
+}
+/* Une seule série : une seule teinte. Les barres partent de la ligne de base. */
+.chart {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  height: 180px;
+  border-bottom: 1px solid var(--brand-line);
+}
+.chart-slot {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: default;
+}
+.chart-slot i {
+  width: 100%;
+  max-width: 28px;
+  min-height: 1px;
+  border-radius: 4px 4px 0 0;
+  background: var(--chart-1, var(--brand-foxfire));
+}
+.chart-slot:is(:hover, :focus-visible) {
+  background: color-mix(in srgb, var(--brand-mist) 6%, transparent);
+  outline: none;
+}
+.chart-slot:is(:hover, :focus-visible) i {
+  background: var(--brand-mist);
+}
+.chart-axis {
+  display: flex;
+  justify-content: space-between;
+  margin: 6px 0 0;
+  font-size: 0.8rem;
+}
+/* Courbes. La couleur ne porte que le trait : les textes gardent les teintes de texte. */
+.admin [data-tone='1'] {
+  --tone: var(--chart-1);
+}
+.admin [data-tone='2'] {
+  --tone: var(--chart-2);
+}
+.card ul.legend {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  padding: 0;
+  margin: 0 0 8px;
+  font-size: 0.85rem;
+  color: var(--brand-haze);
+}
+.legend li,
+.chart-tip span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+:is(.legend, .chart-tip) i {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: var(--tone);
+}
+.linechart-plot {
+  position: relative;
+}
+.linechart svg {
+  display: block;
+  /* Le doigt fait défiler la page verticalement et lit le graphique horizontalement. */
+  touch-action: pan-y;
+}
+.grid-line {
+  stroke: var(--brand-line);
+  opacity: 0.6;
+}
+.axis-label {
+  fill: var(--brand-haze);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.line {
+  fill: none;
+  stroke: var(--tone);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.area {
+  fill: var(--chart-1);
+  opacity: 0.14;
+}
+.crosshair {
+  stroke: var(--brand-haze);
+}
+/* Le liseré de la couleur de la carte détache le point des courbes qu'il croise. */
+.dot {
+  fill: var(--tone);
+  stroke: var(--brand-ink);
+  stroke-width: 2;
+}
+.chart-tip {
+  position: absolute;
+  top: 8px;
+  z-index: 1;
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--brand-line);
+  border-radius: 10px;
+  background: var(--brand-ink-raised);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.4);
+  font-size: 0.85rem;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.chart-tip strong {
+  margin-left: auto;
+  padding-left: 16px;
+  font-variant-numeric: tabular-nums;
+}
+/* Classement : chaque ligne porte son nom, son chiffre et une barre proportionnelle. */
+.card ul.barlist {
+  list-style: none;
+  display: grid;
+  gap: 12px;
+  padding: 0;
+  margin: 0;
+}
+.barlist li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px 12px;
+  font-size: 0.95rem;
+}
+.barlist span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.barlist strong {
+  font-variant-numeric: tabular-nums;
+}
+.barlist i {
+  grid-column: 1 / -1;
+  height: 6px;
+  min-width: 2px;
+  border-radius: 0 4px 4px 0;
+  background: var(--chart-1);
+}
+/* Lu par les lecteurs d'écran, invisible à l'écran. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 /* ── Tableau (politique de cookies) ── */
 .table-wrap {
   overflow-x: auto;
@@ -615,7 +1346,9 @@ td {
   border: 1px solid var(--brand-line);
   border-radius: var(--brand-radius);
   padding: 20px;
-  box-shadow: 0 12px 40px rgb(0 0 0 / 0.5);
+  box-shadow:
+    0 12px 40px rgb(0 0 0 / 0.5),
+    0 0 50px -14px color-mix(in srgb, var(--glow) 55%, transparent);
 }
 .consent p {
   font-size: 0.95rem;
@@ -631,7 +1364,29 @@ td {
   border-color: var(--brand-mist);
 }
 
+@media (max-width: 900px) {
+  /* Le formulaire d'abord, les arguments ensuite. */
+  .auth-split {
+    grid-template-columns: 1fr;
+    gap: 40px;
+  }
+  .auth-split .auth {
+    order: -1;
+    margin: 0 auto;
+  }
+  .showcase {
+    width: 100%;
+    max-width: 440px;
+    margin: 0 auto;
+  }
+  .showcase-art {
+    display: none;
+  }
+}
 @media (max-width: 760px) {
+  .auth-card {
+    padding: 24px 20px;
+  }
   .hero .container {
     grid-template-columns: 1fr;
   }
@@ -715,8 +1470,133 @@ td {
     box-shadow: 0 0 0 10px transparent;
   }
 }
+@keyframes glow-cycle {
+  0%,
+  100% {
+    --glow: var(--brand-spirit);
+  }
+  33% {
+    --glow: var(--brand-foxfire);
+  }
+  66% {
+    --glow: var(--brand-ember);
+  }
+}
+@keyframes turn {
+  to {
+    --angle: 360deg;
+  }
+}
+@keyframes drift {
+  to {
+    translate: 12vmax 8vmax;
+    scale: 1.15;
+  }
+}
+@keyframes drift-back {
+  to {
+    translate: -14vmax 6vmax;
+    scale: 0.9;
+  }
+}
+@keyframes spin {
+  to {
+    rotate: 1turn;
+  }
+}
+@keyframes draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+}
+@keyframes shake {
+  25% {
+    translate: -6px 0;
+  }
+  50% {
+    translate: 5px 0;
+  }
+  75% {
+    translate: -3px 0;
+  }
+}
 
 @media (prefers-reduced-motion: no-preference) {
+  /* Lueur : les halos dérivent, la couleur passe d'une teinte de la marque à l'autre. */
+  .ambient i {
+    animation: drift 26s ease-in-out infinite alternate;
+  }
+  .ambient i:nth-child(2) {
+    animation: drift-back 32s -8s ease-in-out infinite alternate;
+  }
+  .ambient i:nth-child(3) {
+    animation-duration: 38s;
+    animation-delay: -15s;
+  }
+  .card.premium::after,
+  .after .demo-screen {
+    animation: glow-cycle 12s linear infinite;
+  }
+  .site-header::after {
+    animation: shimmer 8s ease-in-out infinite alternate;
+  }
+
+  /* Connexion et inscription : entrée en cascade, liseré qui tourne, retours visuels. */
+  .auth-card {
+    animation:
+      slide-up 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) backwards,
+      glow-cycle 12s linear infinite;
+  }
+  .auth-card::before {
+    animation: turn 7s linear infinite;
+  }
+  .auth-card > :not(h1),
+  .showcase > * {
+    animation: rise 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+  }
+  :is(.auth-card, .showcase) > :not(.notice):nth-child(2) {
+    animation-delay: 0.08s;
+  }
+  :is(.auth-card, .showcase) > :not(.notice):nth-child(3) {
+    animation-delay: 0.16s;
+  }
+  :is(.auth-card, .showcase) > :not(.notice):nth-child(n + 4) {
+    animation-delay: 0.24s;
+  }
+  .chip {
+    animation: float 5s ease-in-out infinite;
+  }
+  .chip.bars {
+    animation-delay: -2.5s;
+  }
+  .field :is(input, textarea, select) {
+    transition:
+      border-color 0.15s,
+      box-shadow 0.15s;
+  }
+  .field label {
+    transition:
+      transform 0.15s ease-out,
+      color 0.15s;
+  }
+  .field-toggle {
+    transition: color 0.15s;
+  }
+  .meter::after {
+    transition:
+      width 0.2s,
+      background 0.2s;
+  }
+  .btn[data-busy]::after {
+    animation: spin 0.7s linear infinite;
+  }
+  .done-mark circle {
+    animation: draw 0.5s ease-out backwards;
+  }
+  .done-mark path {
+    animation: draw 0.35s 0.45s ease-out backwards;
+  }
+
   /* Accueil : entrée en cascade, mascotte qui flotte, dégradé qui glisse. */
   .hero-copy > * {
     animation: rise 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
@@ -731,7 +1611,9 @@ td {
     animation-delay: 0.2s;
   }
   .hero-art {
-    animation: rise 0.8s 0.15s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+    animation:
+      rise 0.8s 0.15s cubic-bezier(0.2, 0.7, 0.2, 1) backwards,
+      glow-cycle 12s linear infinite;
   }
   .hero-art img {
     animation: float 6s ease-in-out infinite;
@@ -843,8 +1725,15 @@ td {
   .notice {
     animation: rise 0.3s ease-out;
   }
+  .notice.error {
+    animation:
+      rise 0.3s ease-out,
+      shake 0.4s 0.15s;
+  }
   .consent {
-    animation: rise 0.35s ease-out;
+    animation:
+      rise 0.35s ease-out,
+      glow-cycle 12s linear infinite;
   }
   details[open] > :is(p, ul) {
     animation: rise 0.25s ease-out;

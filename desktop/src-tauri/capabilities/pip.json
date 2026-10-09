@@ -1,0 +1,11 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "pip",
+  "description": "The floating camera window may listen to the frames the application emits, be dragged and close itself. No file system, shell or network access is granted to the web view.",
+  "windows": ["pip"],
+  "permissions": [
+    "core:event:default",
+    "core:window:allow-start-dragging",
+    "core:window:allow-close"
+  ]
+}

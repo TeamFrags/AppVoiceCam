@@ -3,11 +3,19 @@ import { z } from 'zod';
 import type { Deps } from './deps.js';
 import { HttpError } from './errors.js';
 import { authenticate, authenticateAdmin, rateLimit, requestMeta } from './http.js';
-import { pageViewReport, recordPageView } from './modules/analytics.js';
+import { countryFromHeader, pageViewReport, recordPageView } from './modules/analytics.js';
 import { beginOAuth, completeOAuth, exchangeDesktopCode } from './modules/auth/oauth.js';
 import * as auth from './modules/auth/service.js';
 import { banUser, unbanUser } from './modules/bans.js';
+import {
+  CREATOR_PLATFORMS,
+  listCreatorApplications,
+  recordCreatorApplication,
+} from './modules/creators.js';
+import { ensureDevAdmin } from './modules/dev.js';
 import { getEntitlements } from './modules/entitlements.js';
+import { accountsReport, adminOverview } from './modules/stats.js';
+import { listUsers } from './modules/users.js';
 
 const email = z.string().trim().email().max(254);
 const password = z.string().min(10).max(128);
@@ -29,6 +37,21 @@ const pageViewBody = z.object({
   // Pathname only: query strings can carry one-time tokens and must never be stored.
   path: z.string().regex(/^\/[^?#]{0,199}$/),
   referrerHost: z.string().max(255).optional(),
+});
+const creatorBody = z.object({
+  name: z.string().trim().min(2).max(80),
+  email,
+  platform: z.enum(CREATOR_PLATFORMS),
+  channelUrl: z
+    .string()
+    .trim()
+    .url()
+    .max(300)
+    .regex(/^https?:\/\//i),
+  message: z.string().trim().max(1000).optional(),
+  locale: z.string().max(10).optional(),
+  // Hidden from people on the form: only a robot fills it in.
+  website: z.string().max(300).optional(),
 });
 const reportQuery = z.object({ days: z.coerce.number().int().min(1).max(365).default(30) });
 
@@ -53,6 +76,8 @@ const exchangeBody = z.object({
   deviceName,
 });
 
+const devLoginBody = z.object({ deviceName, web: z.boolean().default(false) });
+
 const REFRESH_COOKIE = 'rt';
 const forgotBody = z.object({ email });
 const resetBody = z.object({ token: opaqueToken, newPassword: password });
@@ -62,6 +87,10 @@ const banBody = z.object({
   durationHours: z.number().int().positive().max(87600).optional(),
 });
 const idParams = z.object({ id: uuid });
+const usersQuery = z.object({
+  search: z.string().trim().max(254).default(''),
+  banned: z.literal('1').optional(),
+});
 
 export function registerRoutes(app: FastifyInstance, deps: Deps): void {
   app.get('/health', async () => {
@@ -103,6 +132,16 @@ export function registerRoutes(app: FastifyInstance, deps: Deps): void {
     const pair = await auth.login(deps, credentials, requestMeta(req));
     return web ? sendWebTokens(reply, pair) : pair;
   });
+
+  // The route does not exist at all unless the server was started by `npm run dev:test`.
+  if (deps.config.DEV_AUTO_LOGIN) {
+    app.post('/v1/dev/login', async (req, reply) => {
+      const { web, deviceName } = devLoginBody.parse(req.body ?? {});
+      const admin = await ensureDevAdmin(deps.db);
+      const pair = await auth.startSession(deps, admin, deviceName, requestMeta(req));
+      return web ? sendWebTokens(reply, pair) : pair;
+    });
+  }
 
   app.post('/v1/auth/refresh', async (req, reply) => {
     await rateLimit(deps, req, 'refresh', 60, 300);
@@ -163,13 +202,39 @@ export function registerRoutes(app: FastifyInstance, deps: Deps): void {
 
   app.post('/v1/analytics/pageview', async (req, reply) => {
     await rateLimit(deps, req, 'pageview', 120, 300);
-    await recordPageView(deps.db, pageViewBody.parse(req.body));
+    const country = countryFromHeader(req.headers['cf-ipcountry']);
+    await recordPageView(deps.db, { ...pageViewBody.parse(req.body), country });
     return reply.code(204).send();
   });
 
   app.get('/v1/admin/analytics/pageviews', async (req) => {
     await authenticateAdmin(deps, req);
     return pageViewReport(deps.db, reportQuery.parse(req.query).days);
+  });
+
+  app.get('/v1/admin/analytics/accounts', async (req) => {
+    await authenticateAdmin(deps, req);
+    return accountsReport(deps.db, reportQuery.parse(req.query).days);
+  });
+
+  app.post('/v1/creators/apply', async (req, reply) => {
+    await rateLimit(deps, req, 'creator-apply', 5, 3600);
+    const parsed = creatorBody.safeParse(req.body);
+    if (!parsed.success) throw new HttpError(400, 'invalid_application');
+    const { website, ...application } = parsed.data;
+    // A robot gets the same answer as a person, and nothing is stored.
+    if (!website) await recordCreatorApplication(deps.db, application);
+    return reply.code(202).send({ status: 'application_received' });
+  });
+
+  app.get('/v1/admin/creators/applications', async (req) => {
+    await authenticateAdmin(deps, req);
+    return { applications: await listCreatorApplications(deps.db) };
+  });
+
+  app.get('/v1/admin/overview', async (req) => {
+    await authenticateAdmin(deps, req);
+    return adminOverview(deps.db);
   });
 
   app.post('/v1/auth/password/forgot', async (req, reply) => {
@@ -216,6 +281,12 @@ export function registerRoutes(app: FastifyInstance, deps: Deps): void {
       throw new HttpError(404, 'session_not_found');
     }
     return reply.code(204).send();
+  });
+
+  app.get('/v1/admin/users', async (req) => {
+    await authenticateAdmin(deps, req);
+    const { search, banned } = usersQuery.parse(req.query);
+    return { users: await listUsers(deps.db, { search, bannedOnly: banned === '1' }) };
   });
 
   app.post('/v1/admin/users/:id/ban', async (req, reply) => {

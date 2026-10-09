@@ -1,4 +1,5 @@
 import { Account } from '@/components/Account';
+import { Admin } from '@/components/Admin';
 import {
   ForgotPasswordForm,
   LoginForm,
@@ -50,4 +51,10 @@ export const account: View = {
   metadata: (l) =>
     pageMetadata(l, '/account/', { title: getMessages(l).account.title, noindex: true }),
   Page: () => <Account />,
+};
+
+export const admin: View = {
+  metadata: (l) =>
+    pageMetadata(l, '/admin/', { title: getMessages(l).admin.title, noindex: true }),
+  Page: () => <Admin />,
 };

@@ -1,7 +1,13 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "The interface may call the application's own commands and listen to its events. No file system, shell or network access is granted to the web view.",
+  "description": "The interface may call the application's own commands, listen to its events and drive its own window, which has no system title bar. No file system, shell or network access is granted to the web view.",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": [
+    "core:default",
+    "core:window:allow-start-dragging",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-close"
+  ]
 }

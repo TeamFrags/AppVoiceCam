@@ -17,6 +17,10 @@ export const fr: Messages = {
   },
   footer: {
     privacy: 'Confidentialité',
+    terms: 'Conditions',
+    refunds: 'Remboursements',
+    support: 'Assistance',
+    creators: 'Créateurs',
     cookies: 'Gérer les cookies',
   },
   home: {
@@ -209,8 +213,19 @@ export const fr: Messages = {
     collect: [
       '<b>Ton compte</b> : adresse e-mail et mot de passe (conservé uniquement sous forme hachée, jamais en clair).',
       '<b>Tes connexions</b> : nom de l’appareil, adresse IP et date, pour te montrer tes sessions actives et détecter une connexion suspecte.',
-      '<b>La mesure d’audience du site</b>, seulement si tu l’acceptes : pages visitées et site de provenance, rattachés à un identifiant anonyme.',
+      '<b>La mesure d’audience du site</b>, seulement si tu l’acceptes : pages visitées, site de provenance, date et heure de la visite, et pays (déduit de ton adresse IP, qui n’est pas enregistrée), rattachés à un identifiant anonyme.',
+      '<b>La connexion avec Google ou Discord</b>, si tu la choisis : l’adresse e-mail et l’identifiant de compte que ce service nous transmet. Nous ne recevons jamais ton mot de passe.',
+      '<b>Les candidatures au programme créateurs</b> : le nom, l’adresse e-mail, le lien de chaîne et le message saisis dans le formulaire.',
     ],
+    basisTitle: 'Ce qui nous autorise à les utiliser',
+    basis: [
+      'Compte et connexions : fournir le service auquel tu t’es inscrit, et notre intérêt légitime à protéger les comptes.',
+      'Mesure d’audience : ton consentement, que tu peux retirer à tout moment.',
+      'Candidatures créateurs : répondre à une demande que tu as faite, avant tout partenariat.',
+    ],
+    recipientsTitle: 'Qui les reçoit',
+    recipients:
+      'Tes données ne sont jamais vendues. Elles ne sont traitées que par les prestataires qui hébergent le service et acheminent nos e-mails, sur nos instructions.',
     noMedia:
       'Nous ne collectons ni l’image de ta caméra ni le son de ton micro : la transformation se fait sur ton PC.',
     cookiesTitle: 'Cookies',
@@ -231,10 +246,201 @@ export const fr: Messages = {
     retention: [
       'Compte : jusqu’à sa suppression.',
       'Mesure d’audience : 25 mois, puis suppression automatique.',
+      'Candidatures créateurs : 12 mois, puis suppression automatique.',
     ],
     rightsTitle: 'Tes droits',
     rights:
       'Tu peux demander l’accès à tes données, leur rectification, leur suppression ou leur export en écrivant à <mail>{email}</mail>. Tu peux aussi saisir la CNIL (cnil.fr).',
+  },
+  legal: {
+    updated: 'Dernière mise à jour : {date}',
+  },
+  terms: {
+    title: 'Conditions d’utilisation',
+    description:
+      'Les règles d’utilisation de {name} : ton compte, ce qui est permis, Premium et tes droits.',
+    sections: [
+      {
+        title: 'Le service',
+        body: [
+          '{name} est une application Windows qui change ton visage et ta voix en direct et les envoie à tes autres applications comme une caméra et un micro ordinaires. Ces conditions s’appliquent dès que tu crées un compte ou que tu utilises l’application ou ce site.',
+          'L’application est encore en développement : des fonctions peuvent changer, apparaître ou être retirées.',
+        ],
+      },
+      {
+        title: 'Ton compte',
+        body: [
+          'Il faut un compte pour utiliser l’application. Donne une adresse e-mail que tu consultes, garde ton mot de passe pour toi et préviens-nous vite si tu penses que quelqu’un d’autre utilise ton compte.',
+          'Tu dois avoir au moins 15 ans. Si tu as moins de 18 ans, il te faut l’accord d’un parent ou de ton représentant légal.',
+        ],
+      },
+      {
+        title: 'Ce qui est permis',
+        body: [
+          'N’utilise que des visages et des voix que tu as le droit d’utiliser. Les visages personnalisés et les voix clonées exigent l’accord de la personne à qui ils appartiennent.',
+          'Il est interdit de te faire passer pour une personne réelle afin de tromper, harceler, escroquer ou nuire, de créer des contenus illégaux, ou de contourner les limites de ton offre ou les protections de l’application.',
+          'Tu restes responsable du respect des règles des applications et des jeux avec lesquels tu utilises {name}.',
+        ],
+      },
+      {
+        title: 'Gratuit et Premium',
+        body: [
+          'L’offre gratuite donne accès à une sélection de visages et de voix. Premium coûte {price} par mois et débloque le reste. Les abonnements ne sont pas encore ouverts : le prix et les conditions seront affichés avant tout paiement.',
+          'Les résiliations et les remboursements sont décrits dans notre <refunds>politique de remboursement</refunds>.',
+        ],
+      },
+      {
+        title: 'Suspension et fermeture du compte',
+        body: [
+          'Si ces conditions ne sont pas respectées, nous pouvons suspendre ou bannir le compte. Le motif est affiché quand tu essaies de te connecter, et tu peux le contester en écrivant à <mail>{email}</mail>.',
+          'Tu peux nous demander de supprimer ton compte à tout moment à la même adresse.',
+        ],
+      },
+      {
+        title: 'Propriété',
+        body: [
+          'L’application, son catalogue de visages et de voix, la marque et ce site nous appartiennent. Ton compte te donne un droit d’utilisation personnel, que tu ne peux ni revendre ni céder.',
+          'Ce que tu crées avec {name} reste à toi.',
+        ],
+      },
+      {
+        title: 'Disponibilité et responsabilité',
+        body: [
+          'Nous faisons de notre mieux pour que le service fonctionne, sans pouvoir promettre qu’il ne sera jamais interrompu. Nous ne sommes pas responsables de la façon dont une application ou un jeu tiers réagit à la caméra ou au micro virtuels.',
+          'Rien dans ces conditions ne retire les droits que la loi te donne en tant que consommateur, notamment la garantie légale de conformité.',
+        ],
+      },
+      {
+        title: 'Modification de ces conditions',
+        body: [
+          'Si nous changeons un point important, nous te prévenons par e-mail ou sur ce site avant qu’il s’applique. Si tu n’es pas d’accord, tu peux fermer ton compte.',
+        ],
+      },
+      {
+        title: 'Droit applicable et contact',
+        body: [
+          'Ces conditions sont soumises au droit français. Si tu vis dans un autre pays de l’Union européenne, tu gardes la protection des règles impératives de ton pays.',
+          'Une question ou une réclamation ? Écris à <mail>{email}</mail> ou consulte la <support>page d’assistance</support>. L’usage de tes données est décrit sur la <privacy>page confidentialité</privacy>.',
+        ],
+      },
+    ],
+  },
+  refunds: {
+    title: 'Politique de remboursement',
+    description: 'Quand et comment obtenir le remboursement d’un paiement {name} Premium.',
+    sections: [
+      {
+        title: 'En bref',
+        body: [
+          'L’offre gratuite ne coûte rien : il n’y a rien à rembourser. Les abonnements Premium ne sont pas encore ouverts : cette politique s’appliquera dès leur ouverture.',
+        ],
+      },
+      {
+        title: '14 jours pour changer d’avis',
+        body: [
+          'Tu as 14 jours à compter de ton premier paiement Premium pour demander un remboursement intégral, sans donner de raison.',
+        ],
+      },
+      {
+        title: 'Résiliation et renouvellements',
+        body: [
+          'Tu peux résilier quand tu veux. Premium reste alors actif jusqu’à la fin de la période déjà payée, et plus aucun paiement n’est prélevé.',
+          'Une période commencée n’est pas remboursée en partie, sauf dans les cas ci-dessous ou lorsque la loi l’impose.',
+        ],
+      },
+      {
+        title: 'Paiement prélevé par erreur',
+        body: [
+          'Un paiement prélevé deux fois, ou prélevé après ta résiliation, est remboursé en totalité.',
+          'Si Premium ne fonctionne plus de notre fait pendant longtemps, écris-nous : nous remboursons le temps perdu.',
+        ],
+      },
+      {
+        title: 'Comment demander',
+        body: [
+          'Écris à <mail>{email}</mail> depuis l’adresse e-mail de ton compte, en indiquant la date du paiement. Nous répondons par e-mail, et un remboursement accepté est renvoyé sur le moyen de paiement utilisé sous 14 jours.',
+          'Voir aussi les <terms>conditions d’utilisation</terms>.',
+        ],
+      },
+    ],
+  },
+  support: {
+    title: 'Assistance',
+    description:
+      'Obtenir de l’aide pour {name} : compte, installation, abonnement et données personnelles.',
+    lead: 'Un problème ou une question ? Écris-nous, une personne lira ton message.',
+    faq: 'Beaucoup de réponses sont déjà dans la <a>FAQ</a>.',
+    emailButton: 'Écrire à {email}',
+    topicsTitle: 'Pour une réponse plus rapide',
+    topics: [
+      {
+        title: 'Compte et connexion',
+        text: 'Écris depuis l’adresse e-mail de ton compte et dis-nous ce que tu vois à l’écran. Nous ne demandons jamais ton mot de passe.',
+      },
+      {
+        title: 'Un bug dans l’application',
+        text: 'Indique ta version de Windows, ta carte graphique, l’application ou le jeu avec lequel tu utilises {name}, et ce que tu faisais quand c’est arrivé.',
+      },
+      {
+        title: 'Abonnement et remboursements',
+        text: 'Donne la date du paiement. Les règles sont dans la <refunds>politique de remboursement</refunds>.',
+      },
+      {
+        title: 'Tes données',
+        text: 'Pour accéder à tes données, les corriger, les exporter ou les supprimer, un simple e-mail suffit : nous répondons sous un mois. Détails sur la <privacy>page confidentialité</privacy>.',
+      },
+    ],
+  },
+  creators: {
+    title: 'Programme créateurs',
+    description:
+      'Streamers et vidéastes : recevez {name} Premium gratuitement et un accès anticipé aux nouveaux visages et aux nouvelles voix.',
+    badge: 'Programme créateurs',
+    heading: 'Tu crées, <b>on t’offre Premium</b>.',
+    lead: 'Tu streames ou tu fais des vidéos ? Rejoins le programme créateurs {name} et profite gratuitement de tout ce que l’application sait faire.',
+    cta: 'Candidater',
+    offerTitle: 'Ce qu’on offre aux créateurs',
+    offers: [
+      {
+        title: 'Premium offert',
+        text: 'Tous les visages, toutes les voix, les visages personnalisés et le clonage de voix, tant que tu fais partie du programme. Dès l’ouverture de Premium.',
+      },
+      {
+        title: 'Les nouveautés avant tout le monde',
+        text: 'Essaie les nouveaux visages et les nouvelles voix en avance, et dis-nous ce que tu en penses.',
+      },
+      {
+        title: 'Un contact direct avec l’équipe',
+        text: 'Une question, une idée, un souci en plein live ? Tu nous parles directement.',
+      },
+    ],
+    whoTitle: 'Qui peut candidater',
+    who: [
+      'Tu publies régulièrement sur Twitch, YouTube, TikTok, Kick ou ailleurs',
+      'Tu atteins une audience minimale : on te communique les critères précis en privé, dans notre réponse',
+      'Ton contenu respecte les règles de la plateforme où tu publies',
+      'Tu as au moins 18 ans',
+    ],
+    rulesTitle: 'Ce qu’on demande en retour',
+    rules: [
+      'Dire clairement à ton public que Premium t’a été offert quand tu montres {name}',
+      'Respecter les <terms>conditions d’utilisation</terms> : ne jamais te faire passer pour une personne réelle afin de tromper',
+      'Rien d’autre : pas de quota de vidéos, pas de texte à réciter',
+    ],
+    formTitle: 'Candidater',
+    formLead:
+      'Nous lisons chaque candidature et répondons par e-mail. Toutes les candidatures ne sont pas acceptées.',
+  },
+  creatorForm: {
+    name: 'Nom ou pseudo',
+    platform: 'Plateforme principale',
+    other: 'Autre',
+    channelUrl: 'Lien vers ta chaîne',
+    message: 'Parle-nous de ton contenu (facultatif)',
+    submit: 'Envoyer ma candidature',
+    done: 'Candidature reçue. Nous te répondons par e-mail.',
+    notice:
+      'Nous utilisons ces informations uniquement pour étudier ta candidature et te répondre. Elles sont supprimées au bout de 12 mois. <a>En savoir plus</a>',
   },
   auth: {
     signInTitle: 'Connexion',
@@ -262,6 +468,70 @@ export const fr: Messages = {
     verifyTitle: 'Confirmation de l’adresse',
     verifying: 'Vérification en cours…',
     verified: 'Adresse confirmée. Tu peux te connecter.',
+    signInLead: 'Content de te revoir. Tes visages et tes voix t’attendent.',
+    registerLead: 'Gratuit, et prêt en moins d’une minute.',
+    registerDoneTitle: 'Regarde ta boîte mail',
+    showPassword: 'Afficher le mot de passe',
+    hidePassword: 'Masquer le mot de passe',
+    showcaseTitle: 'Un nouveau visage, une nouvelle voix, <b>en direct</b>.',
+    perks: [
+      'Gratuit pour commencer, sans carte bancaire',
+      'Fonctionne avec Discord et tes jeux',
+      'Ton image et ta voix ne quittent jamais ton PC',
+    ],
+    statUsers: 'utilisateurs',
+    statApps: 'applications compatibles',
+    statLocal: 'traité sur ton PC',
+  },
+  admin: {
+    title: 'Tableau de bord',
+    live: 'En direct, actualisé toutes les 15 secondes',
+    forbidden: 'Cette page est réservée aux administrateurs.',
+    periods: { day: '24 heures', week: '7 jours', month: '30 jours', year: '12 mois' },
+    visitors: 'Visiteurs',
+    views: 'Pages vues',
+    signups: 'Nouveaux comptes',
+    applications: 'Candidatures créateurs',
+    accounts: 'Comptes',
+    verified: 'Comptes vérifiés',
+    activeToday: 'Actifs ces dernières 24 heures',
+    premium: 'Abonnés Premium',
+    total: 'sur la période',
+    topPages: 'Pages les plus vues',
+    topReferrers: 'D’où viennent les visiteurs',
+    none: 'Rien pour l’instant.',
+    sections: {
+      overview: 'Vue d’ensemble',
+      audience: 'Audience',
+      accounts: 'Comptes',
+      creators: 'Créateurs',
+    },
+    traffic: 'Fréquentation du site',
+    growth: 'Évolution du nombre de comptes',
+    countries: 'Pays des visiteurs',
+    hours: 'Heures de visite',
+    hoursNote: 'Pages vues par heure de la journée, dans ton fuseau horaire.',
+    unknownCountry: 'Non localisé',
+    locationNote:
+      'Le pays est déduit de l’adresse IP au moment de la visite ; l’adresse elle-même n’est jamais enregistrée.',
+    search: 'Rechercher un e-mail',
+    bannedOnly: 'Sanctionnés uniquement',
+    roleAdmin: 'Admin',
+    unverified: 'Non vérifié',
+    joined: 'Inscrit le {date}',
+    lastSeen: 'vu le {date}',
+    banned: 'Banni',
+    suspendedUntil: 'Suspendu jusqu’au {date}',
+    ban: 'Bannir',
+    unban: 'Lever la sanction',
+    sanction: 'Sanction',
+    permanent: 'Bannissement définitif',
+    suspension: 'Suspension, {period}',
+    reason: 'Motif (montré à la personne)',
+    confirm: 'Confirmer',
+    cancel: 'Annuler',
+    consentNote:
+      'Les visiteurs et les pages vues ne comptent que les personnes qui ont accepté la mesure d’audience.',
   },
   account: {
     title: 'Mon compte',
@@ -307,6 +577,8 @@ export const fr: Messages = {
     account_banned: 'Ce compte est banni ou suspendu.',
     suspended: 'Compte suspendu jusqu’au {date}. Motif : {reason}',
     banned: 'Compte banni. Motif : {reason}',
+    invalid_application:
+      'Vérifie les champs : un nom, un e-mail valide et un lien vers ta chaîne commençant par https://.',
     generic: 'Une erreur est survenue. Réessaie plus tard.',
   },
 };

@@ -11,6 +11,7 @@
     "build:ui": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
     "icons": "node scripts/icons.mjs",
+    "models": "node scripts/fetch-models.mjs",
     "test": "cargo test --manifest-path src-tauri/Cargo.toml",
     "test:integration": "node scripts/integration.mjs",
     "ui-preview": "npm run build:ui && node scripts/ui-preview.mjs"

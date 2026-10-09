@@ -12,7 +12,7 @@ réellement construit et les décisions prises. Il est mis à jour à chaque pha
 | 1 bis | Scripts de déploiement VPS isolés                | Écrits, jamais exécutés |
 | 2     | Application desktop, capture caméra/micro        | Fait (capture caméra jamais essayée : aucune caméra sur le PC de développement) |
 | 3     | Pipeline visage temps réel                       | À faire  |
-| 4     | Pipeline voix temps réel                         | À faire  |
+| 4     | Pipeline voix temps réel                         | Fait dans le retour audio ; sortie vers les autres applications avec la phase 5 |
 | 5     | Caméra et micro virtuels                         | À faire  |
 | 6     | Modèles servis depuis le serveur                 | À faire  |
 | 7     | Abonnements Premium (Stripe)                     | À faire  |
@@ -119,6 +119,23 @@ vérifiée par le fournisseur est refusé. Si un compte local existe déjà pour
 jamais été confirmé, son mot de passe est effacé au moment du rattachement : quelqu'un a pu le
 créer à l'avance pour piéger le vrai propriétaire.
 
+**Filtres et effets sans modèle.** Les filtres de caméra sont des formes décrites une fois dans
+le repère du visage aligné, puis replacées sur chaque image grâce aux cinq repères du détecteur.
+Les effets de voix sont du traitement du signal échantillon par échantillon. Tout se fait dans le
+cœur, après l'échange de visage : la caméra et le micro virtuels recevront donc le même résultat
+que l'aperçu.
+
+**Voix clonée par blocs.** Le modèle de conversion n'est pas fait pour le direct : la voix est
+découpée en blocs de 93 ms, chacun converti avec la demi-seconde qui le précède, puis raccordé au
+suivant par un fondu. La fenêtre donnée au modèle garde toujours la même longueur, parce que la
+carte graphique ralentit fortement quand la taille de l'entrée change. Le calcul tourne sur son
+propre fil : la fonction appelée par la carte son ne fait que déposer le son du micro.
+
+**Fenêtre flottante aux droits réduits.** La seconde fenêtre reçoit les images que le cœur émet
+déjà pour l'aperçu. Ses droits système (`capabilities/pip.json`) se limitent à écouter, être
+déplacée et se fermer. Les commandes du cœur lui restent accessibles, comme à toute fenêtre de
+l'application : elle n'en appelle aucune.
+
 **Nom de code fixe.** L'identifiant de l'application (`com.newapp.desktop`) et l'entrée du
 gestionnaire d'identification ne portent pas le nom commercial : un changement de nom ne casse
 ni les installations ni les sessions.
@@ -179,6 +196,21 @@ npm run lint
 
 Hébergement, isolation sur le VPS partagé et mise en ligne : [deployment.md](deployment.md).
 Changement de nom, de palette ou de mascotte : [brand/brand.md](brand/brand.md).
+
+Tout lancer d'un coup, déjà connecté en administrateur, sans créer de compte :
+
+```
+npm run dev:test              # API + site + logiciel
+npm run dev:test -- web       # API + site seulement
+npm run dev:test -- desktop   # API + logiciel seulement
+```
+
+Le script démarre l'API avec `DEV_AUTO_LOGIN=true`, ce qui ajoute la route `POST /v1/dev/login` :
+elle ouvre une session pour le compte `admin@dev.local` (créé au besoin, sans mot de passe). Le
+site et le logiciel l'appellent quand ils n'ont pas de session. Garde-fous : l'API refuse de
+démarrer avec ce réglage hors `NODE_ENV=development` ou sur une adresse non locale, et l'appel côté
+logiciel n'est compilé que dans les builds de développement (`debug_assertions`). Se déconnecter
+dans ce mode reconnecte aussitôt : pour tester l'écran de connexion, utiliser `npm run dev`.
 
 Créer un administrateur en développement :
 

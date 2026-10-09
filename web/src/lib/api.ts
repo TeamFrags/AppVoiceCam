@@ -10,6 +10,10 @@ let accessToken: string | null = null;
 const SIGNED_IN_HINT = 'signed-in';
 export const SESSION_EVENT = 'sessionchange';
 
+// Set by `npm run dev:test` only: the local API then hands out an admin session on request.
+// A production API has no such route, so the flag could do nothing there.
+const DEV_AUTO_LOGIN = process.env.NEXT_PUBLIC_DEV_AUTO_LOGIN === '1';
+
 export class ApiError extends Error {
   constructor(
     public readonly status: number,
@@ -21,6 +25,7 @@ export class ApiError extends Error {
 }
 
 export function hasSessionHint(): boolean {
+  if (DEV_AUTO_LOGIN) return true;
   try {
     return localStorage.getItem(SIGNED_IN_HINT) === '1';
   } catch {
@@ -73,7 +78,13 @@ async function refreshNow(): Promise<boolean> {
       '/v1/auth/refresh',
       'POST',
       {},
-    );
+    ).catch((err: unknown) => {
+      if (!DEV_AUTO_LOGIN) throw err;
+      return request<{ accessToken: string }>('/v1/dev/login', 'POST', {
+        deviceName: 'dev:test',
+        web: true,
+      });
+    });
     accessToken = token;
     // Also covers a sign-in that ended on the server (Google, Discord): only the cookie came back.
     setSessionHint(true);

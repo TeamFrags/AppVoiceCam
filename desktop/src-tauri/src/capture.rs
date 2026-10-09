@@ -6,7 +6,7 @@
 use std::{
     io::Cursor,
     sync::{
-        atomic::{AtomicBool, AtomicU32, Ordering},
+        atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering},
         Arc, Mutex,
     },
     thread,
@@ -23,12 +23,67 @@ use nokhwa::{
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
-use crate::error::{AppError, AppResult};
+use crate::{
+    effects::{self, MonitorFeed, MonitorPlayback, MonitorQueue, Pending, VoiceSettings},
+    error::{AppError, AppResult},
+    face::FaceSwap,
+    filters::Filter,
+    voice::VoiceClone,
+};
 
 /// Preview frames are capped: the interface only needs a smooth picture, not every frame.
 const PREVIEW_INTERVAL: Duration = Duration::from_millis(33);
 const PREVIEW_JPEG_QUALITY: u8 = 70;
+/// In economy mode fewer frames go through the face models, which is what loads the graphics card.
+const ECONOMY_INTERVAL: Duration = Duration::from_millis(125);
 const LEVEL_INTERVAL: Duration = Duration::from_millis(50);
+const RECORD_MAX_SECONDS: usize = 60;
+
+/// Collects what the microphone hears while a voice sample is being recorded, as mono samples.
+#[derive(Default)]
+pub struct Recorder {
+    active: AtomicBool,
+    rate: AtomicU32,
+    samples: Mutex<Vec<f32>>,
+}
+
+impl Recorder {
+    pub fn begin(&self) {
+        self.samples.lock().unwrap().clear();
+        self.active.store(true, Ordering::SeqCst);
+    }
+
+    /// Stops listening and returns the length of the recording, in seconds.
+    pub fn end(&self) -> f32 {
+        self.active.store(false, Ordering::SeqCst);
+        let rate = self.rate.load(Ordering::SeqCst).max(1);
+        self.samples.lock().unwrap().len() as f32 / rate as f32
+    }
+
+    /// Hands over the recording with its sample rate, leaving nothing behind.
+    pub fn take(&self) -> (Vec<f32>, u32) {
+        self.active.store(false, Ordering::SeqCst);
+        (std::mem::take(&mut *self.samples.lock().unwrap()), self.rate.load(Ordering::SeqCst))
+    }
+
+    fn push<T: cpal::Sample>(&self, data: &[T], channels: usize)
+    where
+        f32: cpal::FromSample<T>,
+    {
+        if !self.active.load(Ordering::Relaxed) {
+            return;
+        }
+        let limit = self.rate.load(Ordering::Relaxed) as usize * RECORD_MAX_SECONDS;
+        let mut samples = self.samples.lock().unwrap();
+        for frame in data.chunks(channels.max(1)) {
+            if samples.len() >= limit {
+                break;
+            }
+            let sum: f32 = frame.iter().map(|s| <f32 as cpal::Sample>::from_sample(*s)).sum();
+            samples.push(sum / frame.len() as f32);
+        }
+    }
+}
 
 #[derive(Serialize)]
 pub struct Device {
@@ -61,6 +116,16 @@ pub fn list_devices() -> Devices {
     Devices { cameras, microphones }
 }
 
+/// Clears a flag when dropped: a helper thread watching it ends with the scope, whichever
+/// way the scope is left.
+struct StopOnDrop(Arc<AtomicBool>);
+
+impl Drop for StopOnDrop {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::SeqCst);
+    }
+}
+
 /// Handle on a running capture thread.
 #[derive(Default)]
 pub struct Capture {
@@ -89,6 +154,8 @@ struct CameraFrame {
     jpeg: String,
     width: u32,
     height: u32,
+    /// Whether the face of this frame was replaced.
+    swapped: bool,
 }
 
 #[derive(Clone, Serialize)]
@@ -96,15 +163,23 @@ struct CaptureEnded {
     reason: String,
 }
 
-fn encode_preview(rgb: &[u8], width: u32, height: u32) -> Option<String> {
+/// JPEG, base64-encoded, ready for an `<img>` source.
+pub fn encode_jpeg(rgb: &[u8], width: u32, height: u32, quality: u8) -> Option<String> {
     let mut jpeg = Cursor::new(Vec::with_capacity(64 * 1024));
-    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpeg, PREVIEW_JPEG_QUALITY)
+    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpeg, quality)
         .encode(rgb, width, height, image::ExtendedColorType::Rgb8)
         .ok()?;
     Some(STANDARD.encode(jpeg.into_inner()))
 }
 
-pub fn start_camera(app: AppHandle, capture: &Capture, id: &str) -> AppResult<()> {
+pub fn start_camera(
+    app: AppHandle,
+    capture: &Capture,
+    face: Arc<FaceSwap>,
+    economy: Arc<AtomicBool>,
+    filter: Arc<AtomicU8>,
+    id: &str,
+) -> AppResult<()> {
     let index = match id.parse::<u32>() {
         Ok(number) => CameraIndex::Index(number),
         Err(_) => CameraIndex::String(id.to_string()),
@@ -121,15 +196,19 @@ pub fn start_camera(app: AppHandle, capture: &Capture, id: &str) -> AppResult<()
             let mut last_preview = Instant::now() - PREVIEW_INTERVAL;
             while running.load(Ordering::SeqCst) {
                 let frame = camera.frame().map_err(|e| e.to_string())?;
-                if last_preview.elapsed() < PREVIEW_INTERVAL {
+                let interval =
+                    if economy.load(Ordering::Relaxed) { ECONOMY_INTERVAL } else { PREVIEW_INTERVAL };
+                if last_preview.elapsed() < interval {
                     continue;
                 }
                 last_preview = Instant::now();
-                let image = frame.decode_image::<RgbFormat>().map_err(|e| e.to_string())?;
-                if let Some(jpeg) = encode_preview(image.as_raw(), image.width(), image.height()) {
-                    let payload =
-                        CameraFrame { jpeg, width: image.width(), height: image.height() };
-                    let _ = app.emit("camera-frame", payload);
+                let mut image = frame.decode_image::<RgbFormat>().map_err(|e| e.to_string())?;
+                let (width, height) = (image.width(), image.height());
+                let filter = Filter::from_code(filter.load(Ordering::Relaxed));
+                let swapped =
+                    face.process_frame(&mut image, width as usize, height as usize, filter);
+                if let Some(jpeg) = encode_jpeg(&image, width, height, PREVIEW_JPEG_QUALITY) {
+                    let _ = app.emit("camera-frame", CameraFrame { jpeg, width, height, swapped });
                 }
             }
             let _ = camera.stop_stream();
@@ -155,7 +234,62 @@ where
         .min(1.0)
 }
 
-pub fn start_microphone(app: AppHandle, capture: &Capture, id: &str) -> AppResult<()> {
+/// Plays the monitor queue on the default speakers or headphones, until the stream is dropped.
+fn open_monitor(
+    queue: MonitorQueue,
+    input_rate: u32,
+    failed: Arc<AtomicBool>,
+) -> Result<cpal::Stream, String> {
+    fn stream<T>(
+        device: &cpal::Device,
+        config: &cpal::StreamConfig,
+        queue: MonitorQueue,
+        mut playback: MonitorPlayback,
+        failed: Arc<AtomicBool>,
+    ) -> Result<cpal::Stream, cpal::BuildStreamError>
+    where
+        T: cpal::SizedSample + cpal::FromSample<f32>,
+    {
+        let channels = usize::from(config.channels).max(1);
+        device.build_output_stream(
+            config,
+            move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
+                let mut queue = queue.lock().unwrap();
+                // The voice is mono: every speaker plays the same sample.
+                for frame in data.chunks_mut(channels) {
+                    frame.fill(<T as cpal::Sample>::from_sample(playback.next(&mut queue)));
+                }
+            },
+            move |_| failed.store(true, Ordering::SeqCst),
+            None,
+        )
+    }
+
+    let device = cpal::default_host().default_output_device().ok_or("no audio output")?;
+    let config = device.default_output_config().map_err(|e| e.to_string())?;
+    let playback = MonitorPlayback::new(input_rate, config.sample_rate().0);
+    let format = config.sample_format();
+    let config = config.into();
+    let stream = match format {
+        cpal::SampleFormat::F32 => stream::<f32>(&device, &config, queue, playback, failed),
+        cpal::SampleFormat::I16 => stream::<i16>(&device, &config, queue, playback, failed),
+        cpal::SampleFormat::U16 => stream::<u16>(&device, &config, queue, playback, failed),
+        other => return Err(format!("unsupported sample format {other:?}")),
+    }
+    .map_err(|e| e.to_string())?;
+    stream.play().map_err(|e| e.to_string())?;
+    Ok(stream)
+}
+
+pub fn start_microphone(
+    app: AppHandle,
+    capture: &Capture,
+    recorder: Arc<Recorder>,
+    voice: Arc<VoiceSettings>,
+    clone: Arc<VoiceClone>,
+    economy: Arc<AtomicBool>,
+    id: &str,
+) -> AppResult<()> {
     let wanted = id.to_string();
     let running = capture.restart();
 
@@ -169,6 +303,30 @@ pub fn start_microphone(app: AppHandle, capture: &Capture, id: &str) -> AppResul
                 .or_else(|| host.default_input_device())
                 .ok_or("no microphone")?;
             let config = device.default_input_config().map_err(|e| e.to_string())?;
+            let channels = usize::from(config.channels());
+            let rate = config.sample_rate().0;
+            recorder.rate.store(rate, Ordering::SeqCst);
+            let monitor = MonitorQueue::default();
+            let pending = Arc::<Pending>::default();
+            let mut feed =
+                MonitorFeed::new(voice.clone(), monitor.clone(), rate, clone.clone(), pending.clone());
+            // The cloned voice is computed on its own thread, which lasts as long as this one.
+            let converting = Arc::new(AtomicBool::new(true));
+            let _stop_converting = StopOnDrop(converting.clone());
+            {
+                let (voice, monitor) = (voice.clone(), monitor.clone());
+                thread::spawn(move || {
+                    effects::convert_voice(
+                        &converting,
+                        &voice,
+                        &clone,
+                        &economy,
+                        &pending,
+                        &monitor,
+                        rate,
+                    )
+                });
+            }
 
             // The audio callback only records the loudest sample; this thread reports it.
             let level = Arc::new(AtomicU32::new(0));
@@ -180,11 +338,14 @@ pub fn start_microphone(app: AppHandle, capture: &Capture, id: &str) -> AppResul
             macro_rules! stream {
                 ($sample:ty) => {{
                     let level = level.clone();
+                    let recorder = recorder.clone();
                     device.build_input_stream(
                         &config.clone().into(),
                         move |data: &[$sample], _: &cpal::InputCallbackInfo| {
                             let block = peak(data).to_bits();
                             level.fetch_max(block, Ordering::Relaxed);
+                            recorder.push(data, channels);
+                            feed.push(data, channels);
                         },
                         on_error,
                         None,
@@ -200,6 +361,9 @@ pub fn start_microphone(app: AppHandle, capture: &Capture, id: &str) -> AppResul
             .map_err(|e| e.to_string())?;
             stream.play().map_err(|e| e.to_string())?;
 
+            // The speakers are opened and closed here as the user turns the monitor on and off.
+            let mut speaker = None;
+            let speaker_failed = Arc::new(AtomicBool::new(false));
             while running.load(Ordering::SeqCst) {
                 thread::sleep(LEVEL_INTERVAL);
                 if failed.load(Ordering::SeqCst) {
@@ -208,6 +372,19 @@ pub fn start_microphone(app: AppHandle, capture: &Capture, id: &str) -> AppResul
                 // Positive floats keep their order when compared as bits, so fetch_max works.
                 let value = f32::from_bits(level.swap(0, Ordering::Relaxed));
                 let _ = app.emit("mic-level", value);
+
+                let lost = speaker_failed.swap(false, Ordering::SeqCst);
+                if speaker.is_some() && (lost || !voice.monitor()) {
+                    speaker = None;
+                } else if speaker.is_none() && voice.monitor() {
+                    monitor.lock().unwrap().clear();
+                    speaker = open_monitor(monitor.clone(), rate, speaker_failed.clone()).ok();
+                }
+                // No output, or it went away: the monitor is off again and the interface is told.
+                if voice.monitor() && speaker.is_none() {
+                    voice.set_monitor(false);
+                    let _ = app.emit("monitor-ended", ());
+                }
             }
             Ok(())
         })();
@@ -239,9 +416,24 @@ mod tests {
     }
 
     #[test]
+    fn a_recording_is_mono_and_only_kept_while_recording() {
+        let recorder = Recorder::default();
+        recorder.rate.store(4, Ordering::SeqCst);
+        recorder.push(&[1.0f32, 1.0], 2);
+        assert_eq!(recorder.end(), 0.0, "nothing is kept before the recording begins");
+
+        recorder.begin();
+        recorder.push(&[1.0f32, 0.0, -0.5, -0.5], 2);
+        assert_eq!(recorder.end(), 0.5);
+        recorder.push(&[1.0f32, 1.0], 2);
+        assert_eq!(recorder.take(), (vec![0.5, -0.5], 4));
+        assert!(recorder.take().0.is_empty());
+    }
+
+    #[test]
     fn preview_is_a_valid_jpeg() {
         let rgb = vec![128u8; 4 * 2 * 3];
-        let jpeg = STANDARD.decode(encode_preview(&rgb, 4, 2).unwrap()).unwrap();
+        let jpeg = STANDARD.decode(encode_jpeg(&rgb, 4, 2, 70).unwrap()).unwrap();
         assert_eq!(&jpeg[..2], &[0xFF, 0xD8]);
     }
 
