@@ -41,7 +41,12 @@ function stub(scenario) {
   const pixel =
     '/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=';
   let profiles = 0;
-  const profile = (name, picture = null) => ({ id: `p${++profiles}`, name, picture });
+  const profile = (name, picture = null) => ({
+    id: `p${++profiles}`,
+    name,
+    picture,
+    included: false,
+  });
   window.__TAURI_INTERNALS__ = {
     metadata: {
       currentWindow: { label: scenario.window ?? 'main' },
@@ -72,6 +77,10 @@ function stub(scenario) {
         return {
           cameras: [{ id: '0', name: 'Webcam HD' }],
           microphones: [{ id: 'Micro', name: 'Microphone (Realtek(R) Audio)' }],
+          speakers: [
+            { id: 'Casque', name: 'Headphones (Realtek(R) Audio)' },
+            { id: 'Cable', name: 'CABLE Input (VB-Audio Virtual Cable)' },
+          ],
         };
       }
       if (command === 'list_library') {
@@ -83,6 +92,13 @@ function stub(scenario) {
       if (command === 'clone_face') return profile(args.name, pixel);
       if (command === 'import_voice' || command === 'save_voice_sample') return profile(args.name);
       if (command === 'stop_voice_sample') return 7.4;
+      if (command === 'phone_link') {
+        // A checkerboard stands in for the QR code.
+        const qr =
+          '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"><rect width="8" height="8" fill="#fff"/><path d="M1 1h2v2H1zM5 1h2v2H5zM1 5h2v2H1zM4 4h1v1H4zM5 5h2v2H5z"/></svg>';
+        return { qr, seconds: 120 };
+      }
+      if (command === 'set_voice_effort') return 400 + args.effort * 90;
       return null;
     },
   };
@@ -141,6 +157,25 @@ try {
     await page.setInputFiles('#face-file', photo);
     await page.waitForSelector('#face-picked:not([hidden])');
   });
+  const android = { device: 'Android', address: '192.168.1.34' };
+  await shoot('phone-code', signedIn, async (page) => {
+    await open(page, 'face');
+    await page.click('#phone');
+    await page.waitForSelector('#phone-qr[src]');
+  });
+  await shoot('phone-request', signedIn, async (page) => {
+    await open(page, 'face');
+    await page.click('#phone');
+    await page.evaluate((phone) => window.__emit('phone-request', phone), android);
+    await page.waitForSelector('#phone-allow:not([hidden])');
+  });
+  await shoot('phone-linked', signedIn, async (page) => {
+    await open(page, 'face');
+    await page.click('#phone');
+    await page.evaluate((phone) => window.__emit('phone-linked', phone), android);
+    await page.click('#phone-close');
+    await page.waitForSelector('#camera option[value=phone]:checked', { state: 'attached' });
+  });
   await shoot('voice', signedIn, async (page) => {
     await open(page, 'voice');
     await page.click('#voice-grid .tile:nth-child(4) .orb');
@@ -148,6 +183,7 @@ try {
     await page.click('#monitor');
     await page.waitForSelector('#mic-toggle.stop');
     await page.click('#effects .chip[data-value=robot]');
+    await page.fill('#effort', '2');
     await page.evaluate(() => window.__emit('mic-level', 0.62));
   });
   await shoot('voice-clone', signedIn, async (page) => {

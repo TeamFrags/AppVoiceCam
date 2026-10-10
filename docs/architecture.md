@@ -126,15 +126,45 @@ cœur, après l'échange de visage : la caméra et le micro virtuels recevront d
 que l'aperçu.
 
 **Voix clonée par blocs.** Le modèle de conversion n'est pas fait pour le direct : la voix est
-découpée en blocs de 93 ms, chacun converti avec la demi-seconde qui le précède, puis raccordé au
-suivant par un fondu. La fenêtre donnée au modèle garde toujours la même longueur, parce que la
-carte graphique ralentit fortement quand la taille de l'entrée change. Le calcul tourne sur son
-propre fil : la fonction appelée par la carte son ne fait que déposer le son du micro.
+débarrassée du bruit du micro (`denoise.rs`, RNNoise), mise à niveau, puis découpée en blocs de
+139 ms, chacun converti avec le son qui l'entoure (430 ms avant, 230 ms après) et raccordé au
+précédent là où leurs ondes se superposent. La fenêtre donnée au modèle garde toujours la même
+longueur, parce que la carte graphique ralentit fortement quand la taille de l'entrée change. Le
+calcul tourne sur son propre fil : la fonction appelée par la carte son ne fait que déposer le
+son du micro. Le retard est surveillé : ce qui s'accumule après un moment lent est rattrapé en
+jouant un rien plus vite, ou retiré entre deux fondus.
+
+**Le bruit n'atteint jamais le modèle.** Le modèle redessine tout ce qu'il entend comme une
+voix : un souffle de micro ressort en grésillement. Le son passe donc d'abord par la réduction de
+bruit ; la mise à niveau ne prend pas le fond sonore de la pièce pour une voix ; et quand
+personne ne parle, rien n'est joué. Le modèle tourne quand même pendant les silences : une carte
+graphique laissée au repos une demi-seconde ralentit, et les premiers mots après une pause
+arrivaient en retard.
+
+**Une description de ta voix par micro.** Le modèle doit savoir quelle voix il entend. Cette
+description (256 nombres, aucun son) est apprise en parlant et gardée dans `own-voice/`, un
+fichier par micro ; un bouton l'efface pour la réapprendre.
 
 **Fenêtre flottante aux droits réduits.** La seconde fenêtre reçoit les images que le cœur émet
 déjà pour l'aperçu. Ses droits système (`capabilities/pip.json`) se limitent à écouter, être
 déplacée et se fermer. Les commandes du cœur lui restent accessibles, comme à toute fenêtre de
 l'application : elle n'en appelle aucune.
+
+**Le téléphone comme caméra, sans serveur.** Le logiciel affiche un code QR ; il mène le
+navigateur du téléphone vers une page servie par le cœur lui-même (`phone.rs`), sur le réseau
+local. Aucune application à installer, et l'image ne passe par aucun serveur. Trois accords
+sont nécessaires : le code à usage unique du QR (2 minutes, retiré après 5 mauvais essais), la
+permission de caméra demandée par le navigateur du téléphone, puis « Autoriser » dans le
+logiciel, qui affiche le type et l'adresse du téléphone. Les images prennent ensuite le même
+chemin qu'une webcam : visage, filtres, aperçu. Un seul téléphone à la fois ; le port est
+fermé dès que le lien s'arrête, et 30 secondes de silence du téléphone y mettent fin.
+
+**Un certificat que personne ne signe.** Les navigateurs n'ouvrent la caméra que sur une page
+HTTPS, et aucune autorité ne délivre de certificat pour `192.168.x.x`. Le cœur en fabrique
+donc un à chaque code : le téléphone affiche un avertissement qu'il faut passer. Le lien est
+chiffré, mais le téléphone ne peut pas prouver qu'il parle bien à ce PC ; c'est le code du QR
+et l'accord donné sur le PC qui décident de qui entre. L'autre voie (page sur le site, image
+en WebRTC) supprimerait l'avertissement mais demande le site et l'API en ligne.
 
 **Nom de code fixe.** L'identifiant de l'application (`com.newapp.desktop`) et l'entrée du
 gestionnaire d'identification ne portent pas le nom commercial : un changement de nom ne casse

@@ -1,0 +1,323 @@
+<!doctype html>
+<!-- Served to the phone by phone.rs, which fills in %APP% and %THEME%. It must stay in one
+     file: the phone can load nothing else from this PC. -->
+<html lang="en">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<meta name="robots" content="noindex" />
+<title>%APP%</title>
+<style>
+  :root {
+    %THEME%
+    color-scheme: dark;
+  }
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    margin: 0;
+    min-height: 100dvh;
+    display: grid;
+    place-items: center;
+    padding: 24px 20px;
+    background: var(--night);
+    color: var(--mist);
+    font: 16px/1.5 system-ui, sans-serif;
+  }
+  main {
+    display: grid;
+    gap: 14px;
+    width: 100%;
+    max-width: 420px;
+    text-align: center;
+  }
+  h1 {
+    margin: 0;
+    font-size: 1.4rem;
+  }
+  p {
+    margin: 0;
+  }
+  .fine {
+    color: var(--haze);
+    font-size: 0.85rem;
+  }
+  video {
+    width: 100%;
+    max-height: 50dvh;
+    border-radius: 14px;
+    border: 1px solid var(--foxfire);
+    background: var(--ink);
+    object-fit: contain;
+  }
+  /* The front camera is shown like a mirror; the PC receives it as it is. */
+  video.mirror {
+    transform: scaleX(-1);
+  }
+  button {
+    padding: 14px 18px;
+    border-radius: 12px;
+    border: 1px solid transparent;
+    background: var(--ember);
+    color: var(--night);
+    font: 600 1rem system-ui, sans-serif;
+  }
+  button.ghost {
+    background: var(--ink-raised);
+    color: var(--mist);
+    border-color: var(--line);
+  }
+  button:disabled {
+    opacity: 0.5;
+  }
+  [hidden] {
+    display: none !important;
+  }
+</style>
+<body data-app="%APP%">
+  <main>
+    <h1 id="title"></h1>
+    <p id="text" role="status"></p>
+    <video id="view" playsinline muted hidden></video>
+    <button id="go"></button>
+    <button id="flip" class="ghost" hidden></button>
+    <button id="stop" class="ghost" hidden></button>
+    <p id="fine" class="fine"></p>
+  </main>
+  <script>
+    (() => {
+      const TEXTS = {
+        en: {
+          title: 'Phone camera',
+          intro: 'This phone will send its camera to {app} on your PC, over your local network. Nothing is recorded.',
+          go: 'Use this camera',
+          waiting: 'Accept the request on your PC…',
+          live: 'Your camera is shown on your PC.',
+          idle: 'Connected. Start the camera on your PC.',
+          refused: 'The PC refused the connection.',
+          expired: 'This code is no longer valid. Show a new one on your PC.',
+          denied: 'The camera was not allowed. Allow it in your browser, then try again.',
+          unsupported: 'This browser cannot share the camera.',
+          ended: 'Disconnected. You can close this page.',
+          flip: 'Switch camera',
+          stop: 'Disconnect',
+          fine: 'Keep this page open and the screen on.',
+        },
+        fr: {
+          title: 'Caméra du téléphone',
+          intro: 'Ce téléphone va envoyer sa caméra à {app} sur ton PC, par ton réseau local. Rien n’est enregistré.',
+          go: 'Utiliser cette caméra',
+          waiting: 'Accepte la demande sur ton PC…',
+          live: 'Ta caméra est affichée sur ton PC.',
+          idle: 'Connecté. Démarre la caméra sur ton PC.',
+          refused: 'Le PC a refusé la connexion.',
+          expired: 'Ce code n’est plus valable. Affiches-en un nouveau sur ton PC.',
+          denied: 'La caméra n’a pas été autorisée. Autorise-la dans ton navigateur, puis réessaie.',
+          unsupported: 'Ce navigateur ne peut pas partager la caméra.',
+          ended: 'Déconnecté. Tu peux fermer cette page.',
+          flip: 'Changer de caméra',
+          stop: 'Déconnecter',
+          fine: 'Garde cette page ouverte et l’écran allumé.',
+        },
+        es: {
+          title: 'Cámara del teléfono',
+          intro: 'Este teléfono enviará su cámara a {app} en tu PC, por tu red local. No se graba nada.',
+          go: 'Usar esta cámara',
+          waiting: 'Acepta la solicitud en tu PC…',
+          live: 'Tu cámara se muestra en tu PC.',
+          idle: 'Conectado. Inicia la cámara en tu PC.',
+          refused: 'El PC ha rechazado la conexión.',
+          expired: 'Este código ya no es válido. Muestra uno nuevo en tu PC.',
+          denied: 'No se ha permitido la cámara. Permítela en tu navegador y vuelve a intentarlo.',
+          unsupported: 'Este navegador no puede compartir la cámara.',
+          ended: 'Desconectado. Puedes cerrar esta página.',
+          flip: 'Cambiar de cámara',
+          stop: 'Desconectar',
+          fine: 'Mantén esta página abierta y la pantalla encendida.',
+        },
+        pt: {
+          title: 'Câmera do celular',
+          intro: 'Este celular vai enviar a câmera para {app} no seu PC, pela sua rede local. Nada é gravado.',
+          go: 'Usar esta câmera',
+          waiting: 'Aceite o pedido no seu PC…',
+          live: 'Sua câmera está sendo exibida no seu PC.',
+          idle: 'Conectado. Inicie a câmera no seu PC.',
+          refused: 'O PC recusou a conexão.',
+          expired: 'Este código não é mais válido. Mostre um novo no seu PC.',
+          denied: 'A câmera não foi permitida. Permita no navegador e tente de novo.',
+          unsupported: 'Este navegador não consegue compartilhar a câmera.',
+          ended: 'Desconectado. Você pode fechar esta página.',
+          flip: 'Trocar de câmera',
+          stop: 'Desconectar',
+          fine: 'Mantenha esta página aberta e a tela ligada.',
+        },
+        de: {
+          title: 'Handykamera',
+          intro: 'Dieses Handy sendet seine Kamera über dein lokales Netzwerk an {app} auf deinem PC. Nichts wird aufgezeichnet.',
+          go: 'Diese Kamera verwenden',
+          waiting: 'Bestätige die Anfrage auf deinem PC…',
+          live: 'Deine Kamera wird auf deinem PC angezeigt.',
+          idle: 'Verbunden. Starte die Kamera auf deinem PC.',
+          refused: 'Der PC hat die Verbindung abgelehnt.',
+          expired: 'Dieser Code ist nicht mehr gültig. Zeig auf deinem PC einen neuen an.',
+          denied: 'Die Kamera wurde nicht erlaubt. Erlaube sie im Browser und versuch es erneut.',
+          unsupported: 'Dieser Browser kann die Kamera nicht teilen.',
+          ended: 'Getrennt. Du kannst diese Seite schließen.',
+          flip: 'Kamera wechseln',
+          stop: 'Trennen',
+          fine: 'Lass diese Seite geöffnet und den Bildschirm an.',
+        },
+      };
+      /** Longest side of the pictures sent, and the pause between two of them. */
+      const MAX_SIDE = 1280;
+      const FRAME_MS = 33;
+      const IDLE_MS = 1000;
+      const MAX_FAILURES = 5;
+
+      const language = (navigator.language || 'en').slice(0, 2);
+      const t = TEXTS[language] || TEXTS.en;
+      document.documentElement.lang = TEXTS[language] ? language : 'en';
+      const $ = (id) => document.getElementById(id);
+      const say = (key) => {
+        $('text').textContent = t[key].replace('{app}', document.body.dataset.app);
+      };
+      const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+      // The one-time code comes after the # of the address: it is not sent with the page
+      // request, and it leaves the address bar at once.
+      const token = location.hash.slice(1);
+      history.replaceState(null, '', '/');
+
+      const view = $('view');
+      const go = $('go');
+      const canvas = document.createElement('canvas');
+      let stream = null;
+      let key = null;
+      let facing = 'user';
+      let live = false;
+      let screenLock = null;
+
+      $('title').textContent = t.title;
+      go.textContent = t.go;
+      $('flip').textContent = t.flip;
+      $('stop').textContent = t.stop;
+      $('fine').textContent = t.fine;
+
+      function closeCamera() {
+        if (stream) stream.getTracks().forEach((track) => track.stop());
+        stream = null;
+      }
+
+      async function openCamera() {
+        closeCamera();
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: { facingMode: facing, width: { ideal: 1280 }, height: { ideal: 720 } },
+        });
+        view.srcObject = stream;
+        view.classList.toggle('mirror', facing === 'user');
+        view.hidden = false;
+        await view.play();
+      }
+
+      /** The link is over, or never started: the camera of the phone is released. */
+      function end(reason) {
+        live = false;
+        closeCamera();
+        view.hidden = true;
+        for (const id of ['go', 'flip', 'stop', 'fine']) $(id).hidden = true;
+        if (screenLock) screenLock.release().catch(() => {});
+        say(reason);
+      }
+
+      const shot = () =>
+        new Promise((resolve) => {
+          const scale = Math.min(1, MAX_SIDE / Math.max(view.videoWidth, view.videoHeight));
+          canvas.width = Math.round(view.videoWidth * scale);
+          canvas.height = Math.round(view.videoHeight * scale);
+          canvas.getContext('2d').drawImage(view, 0, 0, canvas.width, canvas.height);
+          canvas.toBlob(resolve, 'image/jpeg', 0.8);
+        });
+
+      // One picture at a time: the next is taken once the PC has answered, so a slow network
+      // lowers the frame rate instead of piling pictures up. While the camera is stopped on
+      // the PC, an empty message a second keeps the link alive.
+      async function run() {
+        let wanted = true;
+        let failures = 0;
+        while (live) {
+          const started = performance.now();
+          try {
+            const picture = wanted && view.videoWidth ? await shot() : null;
+            const answer = await fetch('/frame', {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${key}` },
+              body: picture || '',
+            });
+            if (answer.status === 401) return end('ended');
+            if (!answer.ok) throw new Error();
+            wanted = (await answer.text()) === '1';
+            failures = 0;
+            if (live) say(wanted ? 'live' : 'idle');
+          } catch {
+            failures += 1;
+            if (failures >= MAX_FAILURES) return end('ended');
+            await sleep(500);
+          }
+          await sleep(wanted ? Math.max(0, FRAME_MS - (performance.now() - started)) : IDLE_MS);
+        }
+      }
+
+      go.addEventListener('click', async () => {
+        if (!navigator.mediaDevices) return end('unsupported');
+        go.disabled = true;
+        try {
+          await openCamera();
+        } catch {
+          // The code has not been used yet: allowing the camera and trying again works.
+          closeCamera();
+          view.hidden = true;
+          go.disabled = false;
+          return say('denied');
+        }
+        go.hidden = true;
+        say('waiting');
+        let answer;
+        try {
+          answer = await fetch('/pair', { method: 'POST', body: token });
+        } catch {
+          return end('ended');
+        }
+        if (answer.status !== 200) return end(answer.status === 403 ? 'refused' : 'expired');
+        key = await answer.text();
+        live = true;
+        $('flip').hidden = false;
+        $('stop').hidden = false;
+        try {
+          screenLock = await navigator.wakeLock.request('screen');
+        } catch {
+          // No screen lock on this browser: the hint asks to keep the screen on.
+        }
+        void run();
+      });
+
+      $('flip').addEventListener('click', () => {
+        facing = facing === 'user' ? 'environment' : 'user';
+        openCamera().catch(() => end('denied'));
+      });
+
+      $('stop').addEventListener('click', () => {
+        fetch('/bye', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${key}` },
+          keepalive: true,
+        }).catch(() => {});
+        end('ended');
+      });
+
+      if (token) say('intro');
+      else end('expired');
+    })();
+  </script>
+</body>
+</html>

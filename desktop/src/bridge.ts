@@ -15,13 +15,17 @@ export interface Device {
 export interface Devices {
   cameras: Device[];
   microphones: Device[];
+  /** Where the monitor can be played: speakers, headphones, virtual cables. */
+  speakers: Device[];
 }
-/** A cloned face or voice, kept on this PC. */
+/** A cloned face or voice, kept on this PC, or a voice that comes with the application. */
 export interface Profile {
   id: string;
   name: string;
   /** Portrait of a face, as a base64 JPEG. Voices have none. */
   picture: string | null;
+  /** Comes with the application: it cannot be removed. */
+  included: boolean;
 }
 export interface Profiles {
   faces: Profile[];
@@ -33,6 +37,19 @@ export interface CameraFrame {
   height: number;
   /** Whether the face of this frame was replaced. */
   swapped: boolean;
+}
+/** A phone that asks to be, or is, the camera. */
+export interface Phone {
+  /** "iPhone", "iPad" or "Android"; empty when its browser does not say. */
+  device: string;
+  /** Its address on the local network. */
+  address: string;
+}
+export interface PhoneOffer {
+  /** The QR code the phone scans, as an SVG picture. */
+  qr: string;
+  /** How long it can be scanned. */
+  seconds: number;
 }
 export type VoiceEffect = 'none' | 'deep' | 'high' | 'robot' | 'echo' | 'radio';
 export type Filter = 'none' | 'glasses' | 'cat' | 'dog' | 'mono' | 'sepia';
@@ -54,11 +71,24 @@ export const bridge = {
   listDevices: () => invoke<Devices>('list_devices'),
   startCamera: (id: string) => invoke<void>('start_camera', { id }),
   stopCamera: () => invoke<void>('stop_camera'),
+  /** Shows a QR code for a phone on the same network. Any earlier code or link is ended. */
+  phoneLink: () => invoke<PhoneOffer>('phone_link'),
+  /** Lets in, or turns away, the phone that scanned the code. */
+  phoneAnswer: (allow: boolean) => invoke<void>('phone_answer', { allow }),
+  phoneUnlink: () => invoke<void>('phone_unlink'),
+  /** The phone linked right now, or null. */
+  phoneStatus: () => invoke<Phone | null>('phone_status'),
   startMicrophone: (id: string) => invoke<void>('start_microphone', { id }),
   stopMicrophone: () => invoke<void>('stop_microphone'),
   /** Plays the microphone back, with its effect, while it runs. Stopping it turns this off. */
   setMonitor: (on: boolean) => invoke<void>('set_monitor', { on }),
+  /** Where the monitor is played. An empty id is the default output of the PC. */
+  setMonitorOutput: (id: string) => invoke<void>('set_monitor_output', { id }),
+  /** Forgets how the user sounds through the current microphone: it is learnt again. */
+  relearnOwnVoice: () => invoke<void>('relearn_own_voice'),
   setVoiceEffect: (effect: VoiceEffect) => invoke<void>('set_voice_effect', { effect }),
+  /** From 0 (least delay) to 3 (cleanest cloned voice). Returns the delay to expect, in ms. */
+  setVoiceEffort: (effort: number) => invoke<number>('set_voice_effort', { effort }),
   setFilter: (filter: Filter) => invoke<void>('set_filter', { filter }),
   /** Opens or closes the floating camera window. Returns whether it is now open. */
   togglePip: () => invoke<boolean>('toggle_pip'),
@@ -93,6 +123,13 @@ export const bridge = {
     listen<number>('mic-level', (event) => handler(event.payload)),
   /** The monitor lost its speakers or found none: the native side has turned it off. */
   onMonitorEnded: (handler: () => void): Promise<UnlistenFn> => listen('monitor-ended', handler),
+  /** A phone scanned the code and waits for the user's answer. */
+  onPhoneRequest: (handler: (phone: Phone) => void): Promise<UnlistenFn> =>
+    listen<Phone>('phone-request', (event) => handler(event.payload)),
+  onPhoneLinked: (handler: (phone: Phone) => void): Promise<UnlistenFn> =>
+    listen<Phone>('phone-linked', (event) => handler(event.payload)),
+  /** The link is over, whoever ended it; also sent when a code runs out unused. */
+  onPhoneEnded: (handler: () => void): Promise<UnlistenFn> => listen('phone-ended', handler),
   onCaptureEnded: (handler: (source: 'camera' | 'mic') => void): Promise<UnlistenFn[]> =>
     Promise.all([
       listen('camera-ended', () => handler('camera')),

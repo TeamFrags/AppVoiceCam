@@ -19,7 +19,10 @@ use std::{
 
 use serde::Deserialize;
 
-use crate::voice::{self, Resampler, Stream, VoiceClone};
+use crate::{
+    denoise::{self, Denoiser},
+    voice::{self, Layout, Resampler, Stream, VoiceClone},
+};
 
 /// Length of the two overlapping grains of the pitch shifter.
 const PITCH_WINDOW_SECONDS: f32 = 0.045;
@@ -31,22 +34,30 @@ const ECHO_FEEDBACK: f32 = 0.42;
 const RADIO_LOW_HZ: f32 = 450.0;
 const RADIO_HIGH_HZ: f32 = 2600.0;
 const RADIO_DRIVE: f32 = 3.5;
-/// The speaker waits for this much sound before playing, so a late block is not a click.
-const MONITOR_START_SECONDS: f32 = 0.03;
-/// Beyond this the monitor has fallen behind the voice: the oldest sound is dropped.
-const MONITOR_MAX_SECONDS: f32 = 0.15;
-/// A cloned voice arrives in blocks, not in a steady flow. This much silence goes in front of
-/// a block that finds the speaker waiting, so the next one may be a little late without a gap.
-const CLONE_MARGIN_SECONDS: f32 = 0.08;
-/// Converted sound the speaker may have in store on top of one block, before it is cut down.
-const CLONE_BACKLOG_SECONDS: f32 = 0.35;
-/// The store is watched over this long. What was never used in that time is delay for nothing,
-/// left by a slow moment: it is dropped, down to the margin.
-const CLONE_TRIM_SECONDS: f32 = 2.0;
+/// Fade at the start of the sound, and when the speaker runs out of it: never a clean cut,
+/// which is heard as a click.
+const FADE_SECONDS: f32 = 0.004;
+/// The store is watched over this many stretches of this length. The least it held in all of
+/// them is what a late block would have found: more than the reserve is delay for nothing.
+const WATCH_SECONDS: f32 = 1.0;
+const WATCH_STRETCHES: usize = 10;
+/// The store is brought back to its reserve by playing this much faster or slower at most:
+/// too little to be heard, and enough to follow two sound cards that do not agree on time.
+const SPEED_TRIM: f64 = 0.01;
+/// More than this above the reserve, a slow moment has left the voice far behind: the surplus
+/// is dropped at once, between two fades.
+const SKIP_SECONDS: f32 = 0.25;
+/// Each time the speaker runs out, the reserve grows; it shrinks back slowly afterwards.
+const RESERVE_MAX_SECONDS: f32 = 0.3;
 /// Microphone sound the models may have in store. More means they cannot keep up.
 const CLONE_PENDING_SECONDS: f32 = 0.75;
 /// How often the conversion thread looks up when no sound arrives.
 const CLONE_POLL: Duration = Duration::from_millis(50);
+/// What a run of the models usually takes on a mid-range graphics card: part of the delay
+/// shown to the user.
+const CLONE_RUN_SECONDS: f32 = 0.04;
+/// What the noise reduction and the changes of sample rate hold back.
+const CLONE_CLEAN_SECONDS: f32 = 0.02;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -70,13 +81,53 @@ impl VoiceEffect {
 }
 
 /// What the user chose for the microphone: read by the audio callbacks, set by the commands.
-#[derive(Default)]
 pub struct VoiceSettings {
     monitor: AtomicBool,
     effect: AtomicU8,
+    /// How much delay is spent on a cleaner cloned voice: see `voice::Layout`.
+    effort: AtomicU8,
+    /// Name of the output the monitor is played on. Empty: the default one.
+    output: Mutex<String>,
+}
+
+impl Default for VoiceSettings {
+    fn default() -> Self {
+        Self {
+            monitor: AtomicBool::new(false),
+            effect: AtomicU8::new(0),
+            effort: AtomicU8::new(voice::EFFORT_DEFAULT),
+            output: Mutex::default(),
+        }
+    }
+}
+
+/// Delay between speaking and hearing the cloned voice, in milliseconds, for an effort.
+pub fn clone_delay_ms(effort: u8, economy: bool) -> u32 {
+    let seconds =
+        Layout::new(effort, economy).delay_seconds()
+        + CLONE_CLEAN_SECONDS
+        + CLONE_RUN_SECONDS
+        + Flow::Blocks.lead();
+    (seconds * 100.0).round() as u32 * 10
 }
 
 impl VoiceSettings {
+    pub fn set_effort(&self, effort: u8) {
+        self.effort.store(effort.min(voice::EFFORT_MAX), Ordering::SeqCst);
+    }
+
+    pub fn effort(&self) -> u8 {
+        self.effort.load(Ordering::Relaxed)
+    }
+
+    pub fn set_output(&self, name: String) {
+        *self.output.lock().unwrap() = name;
+    }
+
+    pub fn output(&self) -> String {
+        self.output.lock().unwrap().clone()
+    }
+
     pub fn set_monitor(&self, on: bool) {
         self.monitor.store(on, Ordering::SeqCst);
     }
@@ -205,8 +256,227 @@ impl Processor {
     }
 }
 
-/// The sound waiting between the microphone and the speaker.
-pub type MonitorQueue = Arc<Mutex<VecDeque<f32>>>;
+/// How sound reaches the store: a little at a time from the microphone, or a whole block at
+/// once from the voice models, which may be late.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Flow {
+    Steady,
+    Blocks,
+}
+
+impl Flow {
+    /// Silence put in front of the first sound, so the following one may be late, in seconds.
+    fn lead(self) -> f32 {
+        match self {
+            Flow::Steady => 0.04,
+            Flow::Blocks => 0.1,
+        }
+    }
+
+    /// Least sound to keep in store at the worst moment, in seconds.
+    fn reserve(self) -> f32 {
+        match self {
+            Flow::Steady => 0.01,
+            Flow::Blocks => 0.07,
+        }
+    }
+}
+
+/// The sound waiting between whoever makes it and the speaker, which takes it at its own
+/// sample rate and in its own time: some sound cards ask for 10 ms every 10 ms, others for
+/// three times that in one go, then nothing for a while.
+///
+/// It never cuts the sound. It starts and ends on a fade, keeps as little in store as the
+/// last seconds have shown to be safe, and gets there by playing a hair faster or slower.
+pub struct Playout {
+    queue: VecDeque<f32>,
+    rate: f32,
+    /// Stored samples used for each speaker sample, before the speed trim.
+    step: f64,
+    speed: f64,
+    position: f64,
+    playing: bool,
+    gain: f32,
+    fade: f32,
+    /// Sound still to be faded in after a start.
+    rising: usize,
+    flow: Flow,
+    /// Extra reserve learnt from running out, in samples.
+    learnt: usize,
+    /// Least held in each of the last stretches, and in the current one.
+    lows: [usize; WATCH_STRETCHES],
+    low: usize,
+    stretch: usize,
+    watched: f64,
+    calm: usize,
+    /// Sound to drop once faded out.
+    skip: usize,
+    /// How many times the speaker ran out of sound: each one is heard as a short gap.
+    pub gaps: u32,
+}
+
+/// Shared by the thread that makes the sound and the speaker callback.
+pub type MonitorQueue = Arc<Mutex<Playout>>;
+
+impl Playout {
+    /// `rate` is that of the sound pushed in. The speaker's is given when it opens.
+    pub fn new(rate: u32) -> Self {
+        let rate = rate.max(1) as f32;
+        Self {
+            queue: VecDeque::new(),
+            rate,
+            step: 1.0,
+            speed: 1.0,
+            position: 0.0,
+            playing: false,
+            gain: 0.0,
+            fade: (FADE_SECONDS * rate).max(1.0),
+            rising: 0,
+            flow: Flow::Steady,
+            learnt: 0,
+            lows: [usize::MAX; WATCH_STRETCHES],
+            low: usize::MAX,
+            stretch: 0,
+            watched: 0.0,
+            calm: 0,
+            skip: 0,
+            gaps: 0,
+        }
+    }
+
+    /// Starts afresh for a speaker of this sample rate.
+    pub fn open(&mut self, speaker_rate: u32) {
+        *self = Self { step: f64::from(self.rate) / f64::from(speaker_rate.max(1)), ..Self::new(self.rate as u32) };
+    }
+
+    fn samples(&self, seconds: f32) -> usize {
+        (seconds * self.rate) as usize
+    }
+
+    fn reserve(&self) -> usize {
+        self.samples(self.flow.reserve()) + self.learnt
+    }
+
+    /// Sound in store, in seconds: part of the delay between speaking and hearing.
+    pub fn held_seconds(&self) -> f32 {
+        self.queue.len() as f32 / self.rate
+    }
+
+    fn forget_lows(&mut self) {
+        self.lows = [usize::MAX; WATCH_STRETCHES];
+        self.low = usize::MAX;
+        self.watched = 0.0;
+        self.speed = 1.0;
+    }
+
+    /// Adds sound. The first sound after a silence starts behind a short wait and on a fade.
+    pub fn push(&mut self, sound: impl Iterator<Item = f32>, flow: Flow) {
+        if flow != self.flow {
+            self.flow = flow;
+            self.forget_lows();
+        }
+        if !self.playing {
+            self.queue.clear();
+            let lead = self.samples(flow.lead()) + self.learnt;
+            self.queue.extend(std::iter::repeat(0.0).take(lead));
+            (self.playing, self.position, self.gain) = (true, 0.0, 1.0);
+            self.rising = self.fade as usize;
+            self.forget_lows();
+        }
+        for sample in sound {
+            let gain = 1.0 - self.rising as f32 / self.fade;
+            self.rising = self.rising.saturating_sub(1);
+            self.queue.push_back(sample * gain);
+        }
+    }
+
+    /// Fills `out` with the next speaker samples. Silence when there is nothing to play.
+    pub fn pull(&mut self, out: &mut [f32]) {
+        for slot in out.iter_mut() {
+            *slot = self.next();
+        }
+        if !self.playing {
+            return;
+        }
+        self.low = self.low.min(self.queue.len());
+        self.watched += out.len() as f64 * self.step;
+        if self.watched >= f64::from(WATCH_SECONDS * self.rate) {
+            self.watched = 0.0;
+            self.lows[self.stretch] = self.low;
+            self.stretch = (self.stretch + 1) % WATCH_STRETCHES;
+            self.low = usize::MAX;
+            self.settle();
+        }
+    }
+
+    /// Steers the store towards its reserve, from the least it held lately.
+    fn settle(&mut self) {
+        let least = self.lows.iter().copied().min().unwrap_or(usize::MAX);
+        if least == usize::MAX {
+            return;
+        }
+        let spare = (least as f32 - self.reserve() as f32) / self.rate;
+        if spare > SKIP_SECONDS {
+            self.skip = self.samples(spare - self.flow.lead());
+            return;
+        }
+        // A tenth of the surplus each second: slow enough to hold a steady speed.
+        let trim = (f64::from(spare) * 0.1).clamp(-SPEED_TRIM, SPEED_TRIM);
+        self.speed = if spare.abs() < 0.003 { 1.0 } else { 1.0 + trim };
+        // A reserve learnt the hard way is given back little by little.
+        self.calm += 1;
+        if self.calm >= WATCH_STRETCHES {
+            self.calm = 0;
+            self.learnt = self.learnt * 9 / 10;
+        }
+    }
+
+    fn next(&mut self) -> f32 {
+        if !self.playing {
+            return 0.0;
+        }
+        // Four samples are read around the position: one before, three from it on.
+        if self.queue.len() < 4 {
+            self.playing = false;
+            self.queue.clear();
+            self.gaps += 1;
+            self.calm = 0;
+            let more = self.learnt + self.learnt / 2 + self.samples(0.02);
+            self.learnt = more.min(self.samples(RESERVE_MAX_SECONDS));
+            return 0.0;
+        }
+        let left = (self.queue.len() - 4) as f32 / self.fade;
+        let wanted = if self.skip > 0 { 0.0 } else { left.min(1.0) };
+        self.gain = if wanted < self.gain {
+            wanted.max(self.gain - 1.0 / self.fade)
+        } else {
+            wanted.min(self.gain + 1.0 / self.fade)
+        };
+        if self.skip > 0 && self.gain <= 0.0 {
+            let dropped = self.skip.min(self.queue.len().saturating_sub(8));
+            self.queue.drain(..dropped);
+            self.skip = 0;
+            self.forget_lows();
+        }
+        // A smooth curve through the four samples (Catmull-Rom): at the same rate and speed
+        // it gives the samples back untouched.
+        let (a, b, c, d) = (self.queue[0], self.queue[1], self.queue[2], self.queue[3]);
+        let t = self.position as f32;
+        let value = b
+            + 0.5 * t * (c - a + t * (2.0 * a - 5.0 * b + 4.0 * c - d + t * (3.0 * (b - c) + d - a)));
+        self.position += self.step * self.speed;
+        while self.position >= 1.0 && self.queue.len() > 4 {
+            self.position -= 1.0;
+            self.queue.pop_front();
+        }
+        if self.position >= 1.0 {
+            // The store ran dry in the middle of a step: the fade has already reached silence.
+            self.position = 0.0;
+            self.queue.pop_front();
+        }
+        value * self.gain
+    }
+}
 
 /// Microphone sound waiting for the voice models, at the microphone's rate.
 #[derive(Default)]
@@ -221,8 +491,6 @@ pub struct MonitorFeed {
     settings: Arc<VoiceSettings>,
     queue: MonitorQueue,
     processor: Processor,
-    limit: usize,
-    restart: usize,
     clone: Arc<VoiceClone>,
     pending: Arc<Pending>,
     pending_limit: usize,
@@ -240,8 +508,6 @@ impl MonitorFeed {
             settings,
             queue,
             processor: Processor::new(rate),
-            limit: (MONITOR_MAX_SECONDS * rate as f32) as usize,
-            restart: (MONITOR_START_SECONDS * rate as f32) as usize,
             clone,
             pending,
             pending_limit: (CLONE_PENDING_SECONDS * rate as f32) as usize,
@@ -270,14 +536,9 @@ impl MonitorFeed {
             return;
         }
         let effect = self.settings.effect();
-        let mut queue = self.queue.lock().unwrap();
-        for sample in mono {
-            queue.push_back(self.processor.process(effect, sample));
-        }
-        if queue.len() > self.limit {
-            let excess = queue.len() - self.restart;
-            queue.drain(..excess);
-        }
+        let processor = &mut self.processor;
+        let sound = mono.map(|sample| processor.process(effect, sample));
+        self.queue.lock().unwrap().push(sound, Flow::Steady);
     }
 }
 
@@ -293,16 +554,22 @@ pub fn convert_voice(
     queue: &MonitorQueue,
     rate: u32,
 ) {
-    let (mut down, mut up) = (Resampler::new(rate, voice::RATE), Resampler::new(voice::RATE, rate));
-    let mut stream = Stream::new(voice::BLOCK_FAST);
-    if let Some(speaker) = clone.speaker() {
-        stream.set_speaker(speaker);
-    }
+    let mut denoiser = Denoiser::new(rate);
+    let (mut down, mut up) =
+        (Resampler::new(denoise::RATE, voice::RATE), Resampler::new(voice::RATE, rate));
+    // Starts with what is known of the user's voice, which may be nothing.
+    let fresh = |layout: Layout| {
+        let mut stream = Stream::new(layout);
+        if let Some((speaker, speech)) = clone.speaker() {
+            stream.set_speaker(speaker, speech);
+        }
+        stream
+    };
+    let mut epoch = clone.epoch();
+    let mut stream = fresh(Layout::default());
     let mut processor = Processor::new(rate);
-    let margin = (CLONE_MARGIN_SECONDS * rate as f32) as usize;
-    let (mut low, mut converted, mut ready) = (Vec::new(), Vec::new(), Vec::new());
-    // Least the speaker had in store when a block arrived, and the sound queued since last check.
-    let (mut spare, mut watched) = (usize::MAX, 0);
+    let (mut clean, mut low, mut converted, mut ready) =
+        (Vec::new(), Vec::new(), Vec::new(), Vec::new());
 
     while running.load(Ordering::SeqCst) {
         let input = {
@@ -317,20 +584,25 @@ pub fn convert_voice(
             stream.restart();
             continue;
         };
-        // Economy mode: longer blocks, so the models run half as often.
-        let economy = economy.load(Ordering::Relaxed);
-        let block = if economy { voice::BLOCK_ECONOMY } else { voice::BLOCK_FAST };
-        if stream.block() != block {
-            stream.set_block(block);
+        // The effort and economy mode may change while speaking.
+        let layout = Layout::new(settings.effort(), economy.load(Ordering::Relaxed));
+        if stream.layout() != layout {
+            stream.set_layout(layout);
         }
-        let limit = ((stream.delay_seconds() + CLONE_BACKLOG_SECONDS) * rate as f32) as usize;
+        // The user asked for their voice to be learnt again.
+        if clone.epoch() != epoch {
+            epoch = clone.epoch();
+            stream = fresh(layout);
+        }
+        clean.clear();
         low.clear();
         converted.clear();
         ready.clear();
-        down.process(&input, &mut low);
+        denoiser.process(&input, &mut clean);
+        down.process(&clean, &mut low);
         stream.push(&low, &mut clone.converter(target), &mut converted);
         if let Some((speaker, speech)) = stream.speaker() {
-            clone.remember_speaker(speaker, speech);
+            clone.remember_speaker(speaker, speech, epoch);
         }
         up.process(&converted, &mut ready);
         if ready.is_empty() {
@@ -338,69 +610,8 @@ pub fn convert_voice(
         }
 
         let effect = settings.effect();
-        let mut queue = queue.lock().unwrap();
-        spare = spare.min(queue.len());
-        watched += ready.len();
-        if queue.is_empty() {
-            queue.extend(std::iter::repeat(0.0).take(margin));
-        } else if watched as f32 >= CLONE_TRIM_SECONDS * rate as f32 {
-            if spare > margin + margin / 2 {
-                queue.drain(..spare - margin);
-            }
-            (spare, watched) = (usize::MAX, 0);
-        }
-        queue.extend(ready.iter().map(|sample| processor.process(effect, *sample)));
-        if queue.len() > limit {
-            let excess = queue.len() - ready.len() - margin;
-            queue.drain(..excess);
-        }
-    }
-}
-
-/// Speaker side of the monitor: hands the queued sound out at the speaker's own sample rate.
-pub struct MonitorPlayback {
-    /// Microphone samples consumed for each speaker sample.
-    step: f64,
-    position: f64,
-    current: f32,
-    next: f32,
-    start: usize,
-    playing: bool,
-}
-
-impl MonitorPlayback {
-    pub fn new(input_rate: u32, output_rate: u32) -> Self {
-        Self {
-            step: f64::from(input_rate.max(1)) / f64::from(output_rate.max(1)),
-            position: 0.0,
-            current: 0.0,
-            next: 0.0,
-            start: (MONITOR_START_SECONDS * input_rate as f32) as usize,
-            playing: false,
-        }
-    }
-
-    /// The next speaker sample. Silence while the queue fills up again after running dry.
-    pub fn next(&mut self, queue: &mut VecDeque<f32>) -> f32 {
-        if !self.playing {
-            if queue.len() < self.start.max(1) {
-                return 0.0;
-            }
-            self.playing = true;
-        }
-        self.position += self.step;
-        while self.position >= 1.0 {
-            self.position -= 1.0;
-            self.current = self.next;
-            match queue.pop_front() {
-                Some(sample) => self.next = sample,
-                None => {
-                    (self.next, self.playing) = (0.0, false);
-                    break;
-                }
-            }
-        }
-        self.current + (self.next - self.current) * self.position as f32
+        let sound = ready.iter().map(|sample| processor.process(effect, *sample));
+        queue.lock().unwrap().push(sound, Flow::Blocks);
     }
 }
 
@@ -487,47 +698,140 @@ mod tests {
     }
 
     #[test]
+    fn the_effort_is_medium_until_chosen_and_costs_delay() {
+        let settings = VoiceSettings::default();
+        assert_eq!(settings.effort(), voice::EFFORT_DEFAULT);
+        settings.set_effort(200);
+        assert_eq!(settings.effort(), voice::EFFORT_MAX);
+        assert_eq!(clone_delay_ms(2, false), 530);
+        assert!(clone_delay_ms(0, false) < 440 && clone_delay_ms(3, false) > 550);
+        assert!(clone_delay_ms(1, true) > clone_delay_ms(1, false));
+    }
+
+    #[test]
     fn unknown_effect_codes_mean_none() {
         assert_eq!(VoiceEffect::from_code(VoiceEffect::Robot as u8), VoiceEffect::Robot);
         assert_eq!(VoiceEffect::from_code(200), VoiceEffect::None);
     }
 
     #[test]
-    fn the_feed_queues_mono_sound_only_while_monitoring_and_never_falls_behind() {
+    fn the_feed_stores_mono_sound_only_while_monitoring() {
         let settings = Arc::new(VoiceSettings::default());
-        let queue = MonitorQueue::default();
+        let queue: MonitorQueue = Arc::new(Mutex::new(Playout::new(1000)));
         let clone = Arc::new(VoiceClone::new(Default::default()));
         let mut feed =
             MonitorFeed::new(settings.clone(), queue.clone(), 1000, clone, Arc::default());
         feed.push(&[1.0f32, 0.0], 2);
-        assert!(queue.lock().unwrap().is_empty(), "nothing is queued while the monitor is off");
+        assert_eq!(queue.lock().unwrap().held_seconds(), 0.0, "nothing while the monitor is off");
 
         settings.set_monitor(true);
         feed.push(&[1.0f32, 0.0, -0.5, -0.5], 2);
-        assert_eq!(*queue.lock().unwrap(), [0.5, -0.5]);
+        // 40 ms of wait, then the two mono samples.
+        assert_eq!(queue.lock().unwrap().queue.len(), 42);
+    }
 
-        feed.push(&[0.0f32; 400], 1);
-        assert_eq!(queue.lock().unwrap().len(), 30, "the backlog is cut down to the start level");
+    /// Plays a note through the store, pushed and pulled in the given amounts, and returns
+    /// what the speaker got with the number of times it ran out.
+    fn play(pushes: &[usize], pulls: &[usize], flow: Flow, seconds: usize) -> (Vec<f32>, u32) {
+        let mut playout = Playout::new(RATE);
+        playout.open(RATE);
+        let note = sine(220.0, seconds as f32 + 1.0);
+        let (mut pushed, mut pulled, mut out) = (0, 0, Vec::new());
+        let (mut pushes, mut pulls) = (pushes.iter().cycle(), pulls.iter().cycle());
+        let (mut next_push, mut next_pull) = (*pushes.next().unwrap(), *pulls.next().unwrap());
+        // Time goes by one sample at a time: sound is made and asked for at the same pace.
+        for now in 0..seconds * RATE as usize {
+            if now == pushed + next_push {
+                playout.push(note[pushed..now].iter().copied(), flow);
+                (pushed, next_push) = (now, *pushes.next().unwrap());
+            }
+            if now == pulled + next_pull {
+                let mut block = vec![0.0; next_pull];
+                playout.pull(&mut block);
+                out.extend(block);
+                (pulled, next_pull) = (now, *pulls.next().unwrap());
+            }
+        }
+        (out, playout.gaps)
+    }
+
+    /// Largest jump between two samples: a click is a jump far above what the note does.
+    fn steepest(sound: &[f32]) -> f32 {
+        sound.windows(2).map(|pair| (pair[1] - pair[0]).abs()).fold(0.0, f32::max)
+    }
+
+    /// Twice the largest jump of the test note itself: a fade adds a little, a cut fifty times more.
+    const NOTE_STEP: f32 = 0.5 * TAU * 220.0 / RATE as f32 * 2.0;
+
+    #[test]
+    fn a_speaker_that_asks_by_fits_and_starts_gets_sound_without_a_gap_or_a_click() {
+        // 10 ms at a time from the microphone; the speaker takes 22 ms then 10 ms at once,
+        // as VoiceMeeter does, or 43 ms in one go.
+        for pulls in [&[480usize][..], &[1056, 5, 475], &[2048]] {
+            let (out, gaps) = play(&[480], pulls, Flow::Steady, 20);
+            assert_eq!(gaps, 0, "{pulls:?}");
+            assert!(steepest(&out) < NOTE_STEP, "{pulls:?}: jump of {}", steepest(&out));
+            let playing = &out[RATE as usize..];
+            assert!(playing.chunks(48).all(|w| w.iter().any(|s| s.abs() > 0.1)), "{pulls:?}");
+        }
+        // Whole blocks of a cloned voice, one of them 60 ms late now and then.
+        let (out, gaps) = play(&[6672, 6672, 9552, 3792], &[1056, 5, 475], Flow::Blocks, 30);
+        assert_eq!(gaps, 0);
+        assert!(steepest(&out) < NOTE_STEP);
     }
 
     #[test]
-    fn playback_waits_for_enough_sound_then_follows_the_speaker_rate() {
-        // Microphone at 1000 Hz, speaker at 2000 Hz: every sample is played twice as long.
-        let mut playback = MonitorPlayback::new(1000, 2000);
-        let mut queue: VecDeque<f32> = (0..10).map(|n| n as f32).collect();
-        assert_eq!(playback.next(&mut queue), 0.0, "30 samples are needed to start");
-        assert_eq!(queue.len(), 10);
+    fn running_out_of_sound_fades_out_and_the_store_learns_to_keep_more() {
+        let mut playout = Playout::new(RATE);
+        playout.open(RATE);
+        let note = sine(220.0, 1.0);
+        playout.push(note[..4800].iter().copied(), Flow::Steady);
+        let mut out = vec![0.0; 9600];
+        playout.pull(&mut out);
+        assert_eq!(playout.gaps, 1);
+        assert!(steepest(&out) < NOTE_STEP, "a fade, not a cut: {}", steepest(&out));
+        assert!(out[8000..].iter().all(|sample| *sample == 0.0));
 
-        queue.extend((10..40).map(|n| n as f32));
-        let played: Vec<f32> = (0..60).map(|_| playback.next(&mut queue)).collect();
-        assert_eq!(queue.len(), 10, "60 speaker samples use 30 microphone samples");
-        assert!(played.windows(2).all(|pair| pair[1] >= pair[0]), "the ramp stays a ramp");
-        assert!((played[59] - 28.5).abs() < 1.0);
+        // The next start waits longer than the first one did.
+        playout.push(note[..480].iter().copied(), Flow::Steady);
+        assert!(playout.queue.len() > 480 + (0.04 * RATE as f32) as usize);
+    }
 
-        // Running dry goes back to waiting instead of stuttering.
-        (0..40).for_each(|_| _ = playback.next(&mut queue));
-        assert!(queue.is_empty());
-        queue.extend([1.0; 5]);
-        assert_eq!(playback.next(&mut queue), 0.0);
+    #[test]
+    fn sound_piling_up_is_played_a_hair_faster_and_a_big_backlog_is_dropped_between_fades() {
+        // The microphone runs 0.2 % fast: after two minutes 240 ms would have piled up.
+        let (out, gaps) = play(&[481], &[480], Flow::Steady, 120);
+        assert_eq!(gaps, 0);
+        assert!(steepest(&out) < NOTE_STEP);
+
+        let mut playout = Playout::new(RATE);
+        playout.open(RATE);
+        let note = sine(220.0, 17.0);
+        // A second of sound arrives at once, then the usual flow.
+        playout.push(note[..48_000].iter().copied(), Flow::Steady);
+        let mut out = Vec::new();
+        for tick in 0..1500 {
+            let at = 48_000 + tick * 480;
+            playout.push(note[at..at + 480].iter().copied(), Flow::Steady);
+            let mut block = vec![0.0; 480];
+            playout.pull(&mut block);
+            out.extend(block);
+        }
+        assert!(playout.held_seconds() < 0.2, "{} s still in store", playout.held_seconds());
+        assert!(steepest(&out) < NOTE_STEP);
+        assert_eq!(playout.gaps, 0);
+    }
+
+    #[test]
+    fn the_store_follows_the_speaker_rate() {
+        // Stored at 1000 Hz, played at 2000 Hz: each stored sample lasts two speaker samples.
+        let mut playout = Playout::new(1000);
+        playout.open(2000);
+        playout.push((0..200).map(|n| n as f32), Flow::Steady);
+        let mut out = vec![0.0; 280];
+        playout.pull(&mut out);
+        // 40 ms of wait, a short fade, then the ramp at half the pace.
+        let ramp = &out[120..280];
+        assert!(ramp.windows(2).all(|pair| (pair[1] - pair[0] - 0.5).abs() < 0.01), "{ramp:?}");
     }
 }

@@ -28,6 +28,25 @@ fn main() {
     println!("cargo:rustc-env=APP_API_URL={api_url}");
     println!("cargo:rustc-env=APP_WEB_URL={web_url}");
 
+    // The page served to a phone used as a camera carries the brand colours, as CSS variables
+    // (`--ink-raised:#261f45;`).
+    let colours = brand["colors"].as_object().expect("brand.json has no colors");
+    let theme: String = colours
+        .iter()
+        .map(|(key, colour)| {
+            let hex = colour["hex"].as_str().expect("a brand colour has no hex");
+            let mut name = String::new();
+            for letter in key.chars() {
+                if letter.is_ascii_uppercase() {
+                    name.push('-');
+                }
+                name.push(letter.to_ascii_lowercase());
+            }
+            format!("--{name}:{hex};")
+        })
+        .collect();
+    println!("cargo:rustc-env=APP_PHONE_THEME={theme}");
+
     // Updates are read from the releases of a public GitHub repository ("owner/name"). Without
     // APP_UPDATE_REPO the address is empty and the program never looks for an update.
     println!("cargo:rerun-if-env-changed=APP_UPDATE_REPO");

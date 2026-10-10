@@ -9,7 +9,7 @@ use std::{env, fs, path::Path, time::Instant};
 
 use app_lib::{
     library::encode_wav,
-    voice::{read_audio, Stream, VoiceClone, BLOCK_ECONOMY, BLOCK_FAST, RATE},
+    voice::{read_audio, Layout, Stream, VoiceClone, EFFORT_DEFAULT, RATE},
 };
 
 fn extension(path: &str) -> &str {
@@ -40,9 +40,10 @@ fn main() {
     let input = read_audio(speech_audio.clone(), extension(speech)).expect("unusable speech");
     let target = clone.target().unwrap();
 
-    // Set APP_ECONOMY to try the longer blocks of economy mode.
+    // APP_EFFORT (0 to 3) and APP_ECONOMY try the other ways of cutting the stream.
     let economy = env::var_os("APP_ECONOMY").is_some();
-    let mut stream = Stream::new(if economy { BLOCK_ECONOMY } else { BLOCK_FAST });
+    let effort = env::var("APP_EFFORT").ok().and_then(|v| v.parse().ok()).unwrap_or(EFFORT_DEFAULT);
+    let mut stream = Stream::new(Layout::new(effort, economy));
     let mut output = Vec::new();
     let mut slowest = std::time::Duration::ZERO;
     let started = Instant::now();

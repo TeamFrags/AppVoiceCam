@@ -1,11 +1,14 @@
 pub mod api;
 pub mod capture;
+pub mod catalogue;
+pub mod denoise;
 pub mod effects;
 pub mod error;
 pub mod face;
 pub mod filters;
 pub mod library;
 pub mod oauth;
+pub mod phone;
 pub mod update;
 pub mod voice;
 
@@ -18,16 +21,18 @@ use std::{
 };
 
 use base64::{engine::general_purpose::STANDARD, Engine};
-use tauri::{AppHandle, Manager, State, WebviewUrl, WebviewWindowBuilder, WindowEvent};
+use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 use tokio::sync::Notify;
 
 use api::{Account, ApiClient};
 use capture::{Capture, Devices, Recorder};
+use catalogue::Catalogue;
 use effects::{VoiceEffect, VoiceSettings};
 use error::{AppError, AppResult};
 use face::FaceSwap;
 use filters::Filter;
 use library::{Kind, Library, Profile, Profiles};
+use phone::{Offer, Phone, PhoneInfo};
 use voice::VoiceClone;
 
 /// Neutral codename: the commercial name can change without orphaning stored sessions.
@@ -46,8 +51,10 @@ struct AppState {
     api: ApiClient,
     camera: Capture,
     microphone: Capture,
+    phone: Phone,
     face: Arc<FaceSwap>,
     library: Arc<Library>,
+    catalogue: Arc<Catalogue>,
     recorder: Arc<Recorder>,
     economy: Arc<AtomicBool>,
     /// Camera filter, as a `Filter` code: read by the capture thread for every frame.
@@ -75,6 +82,7 @@ async fn require_session(state: &AppState) -> AppResult<()> {
 fn stop_captures(state: &AppState) {
     state.camera.stop();
     state.microphone.stop();
+    state.phone.close();
     state.recorder.take();
     state.voice.set_monitor(false);
 }
@@ -174,6 +182,18 @@ async fn list_devices(state: State<'_, AppState>) -> AppResult<Devices> {
 async fn start_camera(app: AppHandle, state: State<'_, AppState>, id: String) -> AppResult<()> {
     require_session(&state).await?;
     capture::require_id(&id)?;
+    if id == phone::CAMERA_ID {
+        let camera = state.phone.camera().ok_or_else(|| AppError::new("phone_not_linked"))?;
+        capture::start_phone_camera(
+            app,
+            &state.camera,
+            state.face.clone(),
+            state.economy.clone(),
+            state.filter.clone(),
+            camera,
+        );
+        return Ok(());
+    }
     capture::start_camera(
         app,
         &state.camera,
@@ -210,6 +230,40 @@ fn stop_microphone(state: State<'_, AppState>) {
     state.voice.set_monitor(false);
 }
 
+/// Shows a QR code that lets a phone on the same network offer its camera. Scanning it is not
+/// enough: the phone gets in only once `phone_answer` allows it.
+#[tauri::command]
+async fn phone_link(app: AppHandle, state: State<'_, AppState>) -> AppResult<Offer> {
+    require_session(&state).await?;
+    let name = app.package_info().name.clone();
+    let notify = Arc::new(move |event| {
+        let _ = match event {
+            phone::Event::Request(phone) => app.emit("phone-request", phone),
+            phone::Event::Linked(phone) => app.emit("phone-linked", phone),
+            phone::Event::Ended => app.emit("phone-ended", ()),
+        };
+    });
+    state.phone.open(&name, notify).await
+}
+
+/// The user's answer to the phone that scanned the code.
+#[tauri::command]
+fn phone_answer(state: State<'_, AppState>, allow: bool) {
+    state.phone.answer(allow);
+}
+
+/// Ends the link with the phone, or withdraws a QR code nobody scanned.
+#[tauri::command]
+fn phone_unlink(state: State<'_, AppState>) {
+    state.phone.close();
+}
+
+/// The phone linked right now, for an interface that has just been drawn again.
+#[tauri::command]
+fn phone_status(state: State<'_, AppState>) -> Option<PhoneInfo> {
+    state.phone.linked()
+}
+
 /// Monitor: the microphone is played back on the speakers or headphones, with its effect. It
 /// only sounds while the microphone runs.
 #[tauri::command]
@@ -217,9 +271,23 @@ fn set_monitor(state: State<'_, AppState>, on: bool) {
     state.voice.set_monitor(on);
 }
 
+/// Chooses where the monitor is played. An empty or unknown name is the default output.
+#[tauri::command]
+fn set_monitor_output(state: State<'_, AppState>, id: String) {
+    state.voice.set_output(id);
+}
+
 #[tauri::command]
 fn set_voice_effect(state: State<'_, AppState>, effect: VoiceEffect) {
     state.voice.set_effect(effect);
+}
+
+/// How much delay is spent on a cleaner cloned voice, from 0 to 3. Returns the delay to
+/// expect between speaking and hearing oneself, in milliseconds.
+#[tauri::command]
+fn set_voice_effort(state: State<'_, AppState>, effort: u8) -> u32 {
+    state.voice.set_effort(effort);
+    effects::clone_delay_ms(state.voice.effort(), state.economy.load(Ordering::Relaxed))
 }
 
 /// Filter drawn on the camera picture, after the face swap.
@@ -272,12 +340,12 @@ async fn with_picture<T: Send + 'static>(
         .map_err(AppError::from)
 }
 
-/// The faces and voices cloned on this PC.
+/// The faces and voices cloned on this PC, and the voices that come with the application.
 #[tauri::command]
 async fn list_library(state: State<'_, AppState>) -> AppResult<Profiles> {
     require_session(&state).await?;
-    let library = state.library.clone();
-    blocking(move || Ok(library.list())).await
+    let (library, catalogue) = (state.library.clone(), state.catalogue.clone());
+    blocking(move || Ok(library.list(catalogue.list()))).await
 }
 
 /// Clones a face from a picture file: it joins the library once a face is found in it.
@@ -312,14 +380,18 @@ async fn swap_photo(state: State<'_, AppState>, image: String) -> AppResult<Stri
     .await
 }
 
-/// Chooses the voice heard instead of the user's own, among the cloned ones. The first use
-/// loads the voice models, which takes a few seconds.
+/// Chooses the voice heard instead of the user's own, among the cloned ones and those that
+/// come with the application. The first use loads the voice models, which takes a few seconds.
 #[tauri::command]
 async fn use_voice(state: State<'_, AppState>, id: String) -> AppResult<()> {
     require_session(&state).await?;
     let (library, clone) = (state.library.clone(), state.voice_clone.clone());
+    let catalogue = state.catalogue.clone();
     blocking(move || {
-        let (audio, extension) = library.voice(&id)?;
+        let (audio, extension) = match catalogue.voice(&id) {
+            Some(audio) => (audio, "wav".to_string()),
+            None => library.voice(&id)?,
+        };
         Ok(clone.set_target(audio, &extension)?)
     })
     .await
@@ -328,6 +400,13 @@ async fn use_voice(state: State<'_, AppState>, id: String) -> AppResult<()> {
 #[tauri::command]
 fn clear_voice(state: State<'_, AppState>) {
     state.voice_clone.clear_target();
+}
+
+/// Forgets how the user sounds through the current microphone: the cloned voice learns it
+/// again from the next words. For another person at the same PC, or a voice gone wrong.
+#[tauri::command]
+fn relearn_own_voice(state: State<'_, AppState>) {
+    state.voice_clone.forget_speaker();
 }
 
 /// Clones a voice from an audio file: its reference recording joins the library.
@@ -428,12 +507,18 @@ pub fn run() {
                 None => app.path().app_local_data_dir()?.join("models"),
             };
             let library = app.path().app_local_data_dir()?.join("library");
+            let own_voice = app.path().app_local_data_dir()?.join("own-voice");
+            // Earlier versions kept one description for every microphone, made before the
+            // noise reduction: it no longer fits what the models hear.
+            let _ = std::fs::remove_file(app.path().app_local_data_dir()?.join("own-voice.bin"));
             app.manage(AppState {
                 api: ApiClient::new(API_URL, KEYCHAIN_SERVICE),
                 camera: Capture::default(),
                 microphone: Capture::default(),
+                phone: Phone::default(),
                 face: Arc::new(FaceSwap::new(models.clone())),
-                voice_clone: Arc::new(VoiceClone::new(models)),
+                catalogue: Arc::new(Catalogue::new(models.join("voices"))),
+                voice_clone: Arc::new(VoiceClone::new(models).remembering(own_voice)),
                 library: Arc::new(Library::open(library)),
                 recorder: Arc::default(),
                 economy: Arc::default(),
@@ -463,8 +548,14 @@ pub fn run() {
             stop_camera,
             start_microphone,
             stop_microphone,
+            phone_link,
+            phone_answer,
+            phone_unlink,
+            phone_status,
             set_monitor,
+            set_monitor_output,
             set_voice_effect,
+            set_voice_effort,
             set_filter,
             toggle_pip,
             list_library,
@@ -474,6 +565,7 @@ pub fn run() {
             swap_photo,
             use_voice,
             clear_voice,
+            relearn_own_voice,
             import_voice,
             start_voice_sample,
             stop_voice_sample,

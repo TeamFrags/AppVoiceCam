@@ -48,6 +48,15 @@ pub struct Profile {
     name: String,
     /// Portrait of a face, as a base64 JPEG. Voices have none.
     picture: Option<String>,
+    /// Comes with the application: it cannot be removed.
+    included: bool,
+}
+
+impl Profile {
+    /// A voice that comes with the application.
+    pub fn included(id: &str, name: &str) -> Self {
+        Self { id: id.to_string(), name: name.to_string(), picture: None, included: true }
+    }
 }
 
 #[derive(Serialize)]
@@ -129,7 +138,8 @@ impl Library {
         Ok(entry)
     }
 
-    pub fn list(&self) -> Profiles {
+    /// The voices that come with the application are listed after the user's own.
+    pub fn list(&self, included: Vec<Profile>) -> Profiles {
         let index = self.index.lock().unwrap();
         let faces = index
             .faces
@@ -138,12 +148,19 @@ impl Library {
                 id: entry.id.clone(),
                 name: entry.name.clone(),
                 picture: fs::read(self.dir.join(&entry.file)).ok().map(|b| STANDARD.encode(b)),
+                included: false,
             })
             .collect();
         let voices = index
             .voices
             .iter()
-            .map(|entry| Profile { id: entry.id.clone(), name: entry.name.clone(), picture: None })
+            .map(|entry| Profile {
+                id: entry.id.clone(),
+                name: entry.name.clone(),
+                picture: None,
+                included: false,
+            })
+            .chain(included)
             .collect();
         Profiles { faces, voices }
     }
@@ -163,7 +180,8 @@ impl Library {
             .map_err(|_| AppError::new("invalid_image"))?;
         let jpeg = jpeg.into_inner();
         let entry = self.store(Kind::Face, name, "jpg", &jpeg)?;
-        Ok(Profile { id: entry.id, name: entry.name, picture: Some(STANDARD.encode(jpeg)) })
+        let picture = Some(STANDARD.encode(jpeg));
+        Ok(Profile { id: entry.id, name: entry.name, picture, included: false })
     }
 
     /// The portrait of a face, as the image file it was saved in.
@@ -195,7 +213,7 @@ impl Library {
             return Err(AppError::new("invalid_audio"));
         }
         let entry = self.store(Kind::Voice, name, &extension, audio)?;
-        Ok(Profile { id: entry.id, name: entry.name, picture: None })
+        Ok(Profile { id: entry.id, name: entry.name, picture: None, included: false })
     }
 
     pub fn remove(&self, kind: Kind, id: &str) -> AppResult<()> {
@@ -226,11 +244,13 @@ mod tests {
         assert_eq!(voice.name, "Narrator");
 
         let reopened = Library::open(library.dir.clone());
-        assert_eq!(reopened.list().voices.len(), 1);
+        assert_eq!(reopened.list(Vec::new()).voices.len(), 1);
+        let listed = reopened.list(vec![Profile::included("arctic-slt", "Iris")]).voices;
+        assert_eq!((listed.len(), listed[1].included), (2, true));
         let (audio, extension) = reopened.voice(&voice.id).unwrap();
         assert_eq!((audio.len(), extension.as_str()), (44 + 16, "wav"));
         reopened.remove(Kind::Voice, &voice.id).unwrap();
-        assert!(reopened.list().voices.is_empty());
+        assert!(reopened.list(Vec::new()).voices.is_empty());
         assert!(reopened.remove(Kind::Voice, &voice.id).unwrap_err().is("not_found"));
         let _ = fs::remove_dir_all(&library.dir);
     }

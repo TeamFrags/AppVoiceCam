@@ -1152,6 +1152,24 @@ body[data-screen='main'] select.language {
 .monitor-row p {
   margin: 0;
 }
+.output-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+.output-row select {
+  flex: 1;
+  min-width: 0;
+}
+.relearn-row {
+  margin-top: 12px;
+  align-items: center;
+  gap: 12px;
+}
+.relearn-row p {
+  margin: 0;
+}
 #monitor {
   display: inline-flex;
   align-items: center;
@@ -1224,4 +1242,97 @@ body[data-screen='main'] select.language {
 }
 .options + p {
   margin-top: 14px;
+}
+
+/* ── Effort slider: four steps, from least delay to cleanest voice ── */
+.effort {
+  margin: 14px 0 0;
+  padding: 12px 14px 10px;
+  border: 1px solid var(--brand-line);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--brand-night) 45%, transparent);
+}
+.effort-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 28px;
+  margin-bottom: 10px;
+}
+.effort-head strong {
+  margin-left: auto;
+  color: var(--brand-foxfire);
+}
+.effort-reset {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--brand-haze);
+  cursor: pointer;
+}
+.effort-reset:hover {
+  background: var(--brand-ink-raised);
+  color: var(--brand-mist);
+}
+.effort-reset svg {
+  width: 16px;
+  height: 16px;
+}
+.effort p {
+  margin: 8px 0 0;
+}
+.slider {
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 26px;
+  margin: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  /* Filled up to the thumb, with a dot at each of the four steps. */
+  background:
+    radial-gradient(circle at 13px 50%, var(--brand-mist) 0 2px, transparent 2.5px),
+    radial-gradient(circle at calc(13px + (100% - 26px) / 3) 50%, var(--brand-mist) 0 2px, transparent 2.5px),
+    radial-gradient(circle at calc(13px + (100% - 26px) * 2 / 3) 50%, var(--brand-mist) 0 2px, transparent 2.5px),
+    radial-gradient(circle at calc(100% - 13px) 50%, var(--brand-mist) 0 2px, transparent 2.5px),
+    linear-gradient(
+      90deg,
+      var(--brand-foxfire) 0,
+      var(--brand-spirit) calc(13px + (100% - 26px) * var(--fill, 33%) / 100%),
+      var(--brand-ink-raised) calc(13px + (100% - 26px) * var(--fill, 33%) / 100%)
+    );
+}
+.slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 0;
+  background: var(--brand-mist);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--brand-night) 60%, transparent);
+}
+.slider:focus-visible {
+  outline: 2px solid var(--brand-foxfire);
+  outline-offset: 3px;
+}
+
+/* ── Phone as a camera: the QR code and the request to answer ── */
+.dialog [data-step] {
+  display: grid;
+  gap: 10px;
+}
+.dialog [data-step] > * {
+  margin: 0;
+}
+.qr {
+  display: block;
+  width: 220px;
+  height: 220px;
+  margin: 4px 0;
+  justify-self: center;
+  border-radius: 12px;
 }

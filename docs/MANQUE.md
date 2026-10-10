@@ -21,7 +21,7 @@ Rien de ceci ne peut être fait à ta place : ce sont des comptes, des achats ou
 | **Identité de l'éditeur** | Nom ou société, adresse : obligatoire dans les mentions légales | `NEXT_PUBLIC_LEGAL_PUBLISHER` |
 | **Relecture juridique** | Confidentialité, CGU, CGV. Les visages et les voix sont des données biométriques au sens du RGPD : une analyse d'impact est à prévoir avant d'ouvrir les visages personnalisés et le clonage de voix | — |
 | **Place sur le disque** | L'espace libre de `C:` est descendu à 4,6 Go pendant la compilation du logiciel (il était remonté à 22 Go ensuite). Les modèles IA et leurs outils demanderont plusieurs dizaines de Go | — |
-| **Une webcam** | Aucune caméra n'est détectée sur ce PC : impossible d'y essayer la capture ni, plus tard, le changement de visage | — |
+| **Une webcam** | Aucune caméra n'est détectée sur ce PC : la capture d'une webcam n'y a jamais tourné. Depuis le 10 octobre 2026, ton téléphone peut servir de caméra (bouton téléphone de la carte Caméra) : c'est le moyen d'essayer le changement de visage en direct | — |
 
 ## 2. Les trois vrais obstacles techniques
 
@@ -37,21 +37,50 @@ environ 65 ms par image en 1280 × 720, soit une quinzaine d'images par seconde.
 Le clonage de voix fonctionne depuis le 9 octobre 2026 (`desktop/src-tauri/src/voice.rs`) : on
 choisit une voix de la bibliothèque, et le micro est rejoué avec cette voix dans le retour audio.
 Deux modèles d'OpenVoice V2 (160 Mo, licence MIT), installés par la même commande. Mesuré sur la
-RTX 3060 : 20 à 60 ms de calcul par bloc de 93 ms, soit environ 250 ms de retard au total ; le
-mode économie double les blocs (environ 350 ms) pour deux fois moins de calcul. Sur le
-processeur seul, le modèle est trop lent pour le direct.
+RTX 3060, en rejouant le trajet micro → casque en temps réel avec une sortie qui réclame le son
+par à-coups, comme VoiceMeeter : environ 540 ms de retard au réglage par défaut, sans aucun
+trou ; 720 ms en mode économie, pour deux fois moins de calcul. Sur le processeur seul, le
+modèle est trop lent pour le direct.
+
+Ce retard ne se réduit pas sans abîmer la voix : le modèle a besoin d'entendre le son qui suit
+un instant pour bien le dessiner. Depuis le 10 octobre 2026, un curseur « Qualité de la voix » à
+quatre crans laisse l'utilisateur choisir combien il en donne : 128, 186, 232 (par défaut) ou
+302 ms, pour un retard mesuré d'environ 430, 490, 540 et 610 ms, sans trou à aucun cran. Le cran
+ne change pas la ressemblance, seulement la propreté du son ; `cargo run --example live` rejoue
+le trajet en temps réel pour le vérifier. **Ce demi-seconde ne descendra pas avec ce modèle** :
+une voix vraiment instantanée (moins de 150 ms) demande un modèle conçu pour le direct, le
+« second moteur » ci-dessous. Quatre réglages se sont révélés décisifs le 10 octobre 2026,
+après une première version jugée « horrible » à l'écoute :
+
+- **le bruit du micro** : le modèle redessine le souffle, un ventilateur ou la ronflette du
+  secteur comme une voix qui grésille sous la vraie. Le micro passe donc d'abord par une
+  réduction de bruit (RNNoise, `denoise.rs`), et rien n'est joué quand personne ne parle. Mesuré
+  sur un micro simulé faible et bruité : note de fond sonore (DNSMOS, sur 5) passée de 2,4 à 4,0,
+  écart avec la voix convertie depuis un son propre passé de 15 à 6 dB ;
+- **le son après chaque bloc** : sans lui la fin de chaque bloc est mal dessinée ;
+- **le volume** : le modèle dessine mal une voix plus faible que celles de son entraînement, et
+  un micro l'est presque toujours. La voix est donc mise à niveau avant la conversion ;
+- **la description de la voix de l'utilisateur** : le modèle doit savoir quelle voix il entend,
+  et le résultat change beaucoup selon cette description. Elle est refaite à 3, 8, 16 et
+  30 secondes de parole, puis gardée dans `own-voice/`, un fichier par micro (256 nombres,
+  aucun son). La première demi-minute de la toute première utilisation d'un micro est donc
+  moins bonne que la suite. Le bouton « Réapprendre ma voix » l'efface.
 
 - **Clonage.** Depuis le 9 octobre 2026, le logiciel garde une bibliothèque locale
   (`desktop/src-tauri/src/library.rs`) : un visage cloné est son portrait, une voix clonée est
   son enregistrement de référence (micro ou fichier), et un preset associe les deux. Le visage
   cloné et la voix clonée sont réellement appliqués. Les effets de voix (grave, robot…) sont du
   traitement du signal, pas du clonage : ils s'ajoutent après la voix clonée.
-- **Un second moteur de voix, plus ressemblant, reste à ajouter.** OpenVoice change le timbre
-  mais garde la hauteur et l'intonation de celui qui parle : une voix d'homme vers une voix de
-  femme reste peu convaincante. Les modèles plus fidèles (MeanVC 2, Apache-2.0 ; X-VC, licence à
+- **Un second moteur de voix, plus ressemblant et plus rapide, reste à ajouter.** OpenVoice
+  change le timbre et la hauteur (mesuré : un homme à 92 Hz ressort à 185 Hz vers une voix de
+  femme à 206 Hz) mais garde l'intonation et l'accent de celui qui parle, et impose une
+  demi-seconde de retard. Les modèles plus fidèles (MeanVC 2, Apache-2.0 ; X-VC, licence à
   vérifier) ne sont pas publiés en ONNX : il faut les exporter depuis PyTorch, donc installer
   Python, qui n'est pas sur ce PC. `voice.rs` est écrit pour qu'un autre moteur se branche à la
   place du premier (le trait `Converter`).
+- **Enregistrements de référence trop courts.** Les pauses d'un enregistrement sont maintenant
+  retirées avant de décrire la voix, mais l'import n'avertit pas encore quand il reste moins de
+  10 secondes de parole (20 à 30 conseillées). Tes deux voix importées font 8,3 et 4,2 s.
 - **VoiceStudio et Deep-Live-Cam ne peuvent pas être intégrés tels quels.** Les deux sont sous
   licence AGPL-3.0 : les embarquer obligerait à publier tout le code du logiciel. VoiceStudio est
   de plus une application Electron avec un serveur Python et PyTorch (5 Go au moins), et il
@@ -62,7 +91,11 @@ processeur seul, le modèle est trop lent pour le direct.
   rien ; les vendre dans un abonnement demanderait une licence commerciale ou d'autres modèles.
   Les modèles de voix (OpenVoice V2) sont sous licence MIT : ils peuvent être vendus.
 - **Qui fournit les visages et les voix du catalogue**, et avec quels droits (accord écrit de
-  chaque personne dont le visage ou la voix est proposé).
+  chaque personne dont le visage ou la voix est proposé). Sept voix sont déjà incluses
+  (`desktop/src-tauri/src/catalogue.rs`) : des enregistrements de CMU ARCTIC, publiés par
+  l'université Carnegie Mellon pour tout usage, commercial compris, à condition de garder leur
+  notice (installée avec eux, `voices/LICENCE.txt`). Elles sont toutes en anglais, cinq hommes
+  et deux femmes, et s'installent avec les modèles. Les visages du catalogue restent à trouver.
 - **Moteur d'inférence** : ONNX Runtime avec la carte graphique (ta RTX 3060 convient pour
   développer), repli sur le processeur.
 
@@ -87,7 +120,7 @@ licence (type VB-Cable, déjà présent sur ton PC avec VoiceMeeter) en négocia
 | 2 — Logiciel, capture | Fait : connexion obligatoire, Google/Discord, capture caméra et micro avec aperçu. Manque : choix de la résolution, profils de performance, statistiques processeur / carte graphique / mémoire, réglages persistants |
 | 3 — Visage temps réel | Fait : visage choisi depuis une photo, appliqué à la caméra et à une photo d'essai, sur la carte graphique (DirectML) avec repli sur le processeur. Manque : essai avec une vraie caméra (aucune sur ce PC), plusieurs visages à la fois, netteté (le modèle travaille en 128 × 128), vitesse (15 images/s), `DirectML.dll` à joindre à l'installateur, visages servis par le serveur |
 | 3 bis — Filtres et fenêtre flottante | Fait : filtres posés sur le visage (lunettes, chat, chien) et sur toute l'image (noir et blanc, sépia), dessinés par le cœur à partir des repères du détecteur, sans fichier image (`filters.rs`) ; fenêtre flottante toujours au premier plan qui montre la caméra. Manque : filtres à base d'images ou de 3D, plusieurs visages, suivi de la bouche et des yeux (le détecteur ne donne que 5 points) |
-| 4 — Voix temps réel | Fait : voix clonée à partir d'un enregistrement (`voice.rs`), retour audio (le micro rejoué sur le casque) et cinq effets sans modèle (`effects.rs`). Tout cela ne s'entend que dans le retour audio tant qu'il n'y a pas de micro virtuel. Manque : un second moteur plus ressemblant pour les PC puissants, le réglage de la hauteur, le choix de la sortie audio, le volume du retour, les modèles servis par le serveur |
+| 4 — Voix temps réel | Fait : voix clonée à partir d'un enregistrement (`voice.rs`), retour audio (le micro rejoué sur le casque) et cinq effets sans modèle (`effects.rs`). Tout cela ne s'entend que dans le retour audio tant qu'il n'y a pas de micro virtuel. Depuis le 10 octobre 2026 : réduction de bruit du micro, choix de la sortie audio, micro et sortie retenus, bouton pour réapprendre sa voix. Manque : un second moteur plus ressemblant et plus rapide, le réglage de la hauteur, le volume du retour, des voix de femme de meilleure qualité, les réglages gardés côté cœur, les modèles servis par le serveur |
 | 5 — Caméra et micro virtuels | Tout (voir ci-dessus) |
 | 6 — Modèles servis par le serveur | Catalogue, versions, téléchargement signé et vérifié, cache, reprise, stockage Cloudflare R2 |
 | 7 — Premium | Stripe : paiement, webhooks, annulation, échecs de paiement. La table et le calcul des droits existent déjà |
@@ -108,10 +141,11 @@ en français uniquement.
 | --- | --- | --- |
 | Connexion Google et Discord | Tout le parcours côté serveur avec un faux fournisseur (15 tests) ; le serveur local du logiciel qui reçoit le code | Un vrai aller-retour chez Google ou Discord : il faut les identifiants |
 | Capture caméra | Le code compile ; l'encodage de l'aperçu est testé | **Aucune caméra n'est détectée sur ce PC** : la capture n'a jamais tourné |
+| Téléphone comme caméra | Le serveur du cœur, par 7 tests (code faux, code déjà utilisé, refus, clé, fin du lien) ; la page du téléphone dans Edge avec une fausse caméra, jusqu'à la réception des images par le cœur (29 images/s en 1280 × 720, `cargo run --example phone -- 127.0.0.1`) ; les trois états du dialogue dans l'aperçu de l'interface | **Jamais avec un vrai téléphone** : ni l'avertissement de certificat sur iPhone et Android, ni le pare-feu Windows (il demandera d'autoriser le logiciel sur le réseau privé à la première utilisation), ni le débit en Wi-Fi, ni le lien entre l'image du téléphone et le changement de visage dans la vraie fenêtre |
 | Capture micro | Trois micros sont bien listés ; le calcul du niveau est testé | Le micro n'a pas été ouvert pendant les tests (volontairement) |
 | Fenêtre du logiciel | Chaque écran a été affiché dans un navigateur avec un faux moteur (`npm run ui-preview -w desktop`) | Personne n'a encore cliqué dans la vraie fenêtre. Depuis qu'elle a sa propre barre de titre, ni son déplacement, ni son redimensionnement, ni ses trois boutons n'ont été essayés |
 | Clonage de voix | L'enregistrement en mono et son fichier WAV sont testés | Aucun enregistrement réel depuis un micro |
-| Voix clonée | Convertie par blocs en ligne de commande (`cargo run --example voice`), sur des voix de synthèse Windows et sur l'enregistrement de la bibliothèque : le timbre mesuré se rapproche bien de la référence (0,46 → 0,88 sur 1), plus vite que le temps réel | **Personne n'a encore écouté le résultat**, ni les raccords entre blocs. Jamais essayée avec un vrai micro, ni en même temps que le changement de visage, qui occupe déjà la carte graphique |
+| Voix clonée | Le trajet complet micro → casque rejoué en temps réel sur de vraies voix enregistrées (CMU ARCTIC), avec une sortie par à-coups : aucun trou sur 15 passages, y compris pendant que le changement de visage occupe la carte graphique ; micro propre, faible ou bruité (souffle et ronflette ajoutés) | **Je n'ai rien pu écouter** : ces mesures comparent des spectres et une note automatique (DNSMOS), pas une impression. Le bruit est simulé : jamais essayée avec un vrai micro dans une vraie pièce |
 | Retour audio et effets | Chaque effet est testé sur des sons de synthèse (hauteur, délai de l'écho, bande de la radio), ainsi que la file entre micro et casque | **Personne ne les a encore écoutés** : ni le rendu des effets, ni le délai du retour, ni l'ouverture d'une vraie sortie audio |
 | Filtres de caméra | Les formes sont testées et ont été regardées sur un visage schématique | Jamais sur un vrai visage ni avec une caméra |
 | Fenêtre flottante | Son contenu a été affiché dans un navigateur ; le logiciel compile avec ses droits réduits | La fenêtre n'a jamais été ouverte : premier plan, déplacement, redimensionnement, fermeture avec la fenêtre principale |
@@ -168,5 +202,10 @@ qui tourne sur sa machine. La vraie protection est donc ailleurs, et elle reste 
   une minute à s'afficher (il est effectif immédiatement côté serveur).
 - L'aperçu caméra passe par des images JPEG envoyées à l'interface : suffisant pour un aperçu,
   pas pour le traitement, qui se fera entièrement dans le cœur.
+- Le téléphone comme caméra ne marche que sur le même réseau local que le PC, et le téléphone
+  affiche un avertissement de certificat à chaque nouveau code (voir architecture.md). Un Wi-Fi
+  d'invités ou d'hôtel qui isole les appareils entre eux l'empêche. La page doit rester ouverte
+  et l'écran allumé : un navigateur mis en arrière-plan coupe sa caméra. Le micro du téléphone
+  n'est pas repris.
 - Trois tests de l'API ont échoué une fois sur une machine chargée, puis sont repassés après
   allongement du délai. Cause probable, non prouvée : lenteur au démarrage de la base de test.

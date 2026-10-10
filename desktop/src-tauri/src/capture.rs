@@ -24,10 +24,11 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
 use crate::{
-    effects::{self, MonitorFeed, MonitorPlayback, MonitorQueue, Pending, VoiceSettings},
+    effects::{self, MonitorFeed, MonitorQueue, Pending, Playout, VoiceSettings},
     error::{AppError, AppResult},
     face::FaceSwap,
     filters::Filter,
+    phone::PhoneCamera,
     voice::VoiceClone,
 };
 
@@ -36,6 +37,8 @@ const PREVIEW_INTERVAL: Duration = Duration::from_millis(33);
 const PREVIEW_JPEG_QUALITY: u8 = 70;
 /// In economy mode fewer frames go through the face models, which is what loads the graphics card.
 const ECONOMY_INTERVAL: Duration = Duration::from_millis(125);
+/// How long the capture waits for a picture from the phone before checking it must go on.
+const PHONE_WAIT: Duration = Duration::from_millis(250);
 const LEVEL_INTERVAL: Duration = Duration::from_millis(50);
 const RECORD_MAX_SECONDS: usize = 60;
 
@@ -95,6 +98,8 @@ pub struct Device {
 pub struct Devices {
     pub cameras: Vec<Device>,
     pub microphones: Vec<Device>,
+    /// Where the monitor can be played: speakers, headphones, virtual cables.
+    pub speakers: Vec<Device>,
 }
 
 pub fn list_devices() -> Devices {
@@ -103,17 +108,17 @@ pub fn list_devices() -> Devices {
         .into_iter()
         .map(|info| Device { id: info.index().to_string(), name: info.human_name() })
         .collect();
-    // Microphones have no stable identifier in cpal, so the name doubles as the id.
-    let microphones = cpal::default_host()
-        .input_devices()
-        .map(|devices| {
-            devices
-                .filter_map(|device| device.name().ok())
-                .map(|name| Device { id: name.clone(), name })
-                .collect()
-        })
-        .unwrap_or_default();
-    Devices { cameras, microphones }
+    // Sound devices have no stable identifier in cpal, so the name doubles as the id.
+    fn named(devices: impl Iterator<Item = cpal::Device>) -> Vec<Device> {
+        devices
+            .filter_map(|device| device.name().ok())
+            .map(|name| Device { id: name.clone(), name })
+            .collect()
+    }
+    let host = cpal::default_host();
+    let microphones = host.input_devices().map(named).unwrap_or_default();
+    let speakers = host.output_devices().map(named).unwrap_or_default();
+    Devices { cameras, microphones, speakers }
 }
 
 /// Clears a flag when dropped: a helper thread watching it ends with the scope, whichever
@@ -204,12 +209,7 @@ pub fn start_camera(
                 last_preview = Instant::now();
                 let mut image = frame.decode_image::<RgbFormat>().map_err(|e| e.to_string())?;
                 let (width, height) = (image.width(), image.height());
-                let filter = Filter::from_code(filter.load(Ordering::Relaxed));
-                let swapped =
-                    face.process_frame(&mut image, width as usize, height as usize, filter);
-                if let Some(jpeg) = encode_jpeg(&image, width, height, PREVIEW_JPEG_QUALITY) {
-                    let _ = app.emit("camera-frame", CameraFrame { jpeg, width, height, swapped });
-                }
+                preview(&app, &face, &filter, &mut image, width, height);
             }
             let _ = camera.stop_stream();
             Ok(())
@@ -219,6 +219,50 @@ pub fn start_camera(
         }
     });
     Ok(())
+}
+
+/// Runs a picture through the face models and the filter, then hands it to the interface.
+fn preview(
+    app: &AppHandle,
+    face: &FaceSwap,
+    filter: &AtomicU8,
+    rgb: &mut [u8],
+    width: u32,
+    height: u32,
+) {
+    let filter = Filter::from_code(filter.load(Ordering::Relaxed));
+    let swapped = face.process_frame(rgb, width as usize, height as usize, filter);
+    if let Some(jpeg) = encode_jpeg(rgb, width, height, PREVIEW_JPEG_QUALITY) {
+        let _ = app.emit("camera-frame", CameraFrame { jpeg, width, height, swapped });
+    }
+}
+
+/// The linked phone as the camera: its pictures take the same path as a webcam's. When the
+/// link ends the thread ends quietly, the interface being told of the phone itself.
+pub fn start_phone_camera(
+    app: AppHandle,
+    capture: &Capture,
+    face: Arc<FaceSwap>,
+    economy: Arc<AtomicBool>,
+    filter: Arc<AtomicU8>,
+    phone: PhoneCamera,
+) {
+    let running = capture.restart();
+
+    thread::spawn(move || {
+        let mut last_preview = Instant::now() - PREVIEW_INTERVAL;
+        while running.load(Ordering::SeqCst) {
+            let Ok(frame) = phone.frame(PHONE_WAIT) else { return };
+            let Some((mut rgb, width, height)) = frame else { continue };
+            let interval =
+                if economy.load(Ordering::Relaxed) { ECONOMY_INTERVAL } else { PREVIEW_INTERVAL };
+            if last_preview.elapsed() < interval {
+                continue;
+            }
+            last_preview = Instant::now();
+            preview(&app, &face, &filter, &mut rgb, width, height);
+        }
+    });
 }
 
 /// Loudest sample of a block, in the 0..1 range, whatever the device's sample format.
@@ -234,30 +278,32 @@ where
         .min(1.0)
 }
 
-/// Plays the monitor queue on the default speakers or headphones, until the stream is dropped.
+/// Plays the monitor queue on the output called `wanted`, or on the default speakers or
+/// headphones when there is none by that name, until the stream is dropped.
 fn open_monitor(
     queue: MonitorQueue,
-    input_rate: u32,
+    wanted: &str,
     failed: Arc<AtomicBool>,
 ) -> Result<cpal::Stream, String> {
     fn stream<T>(
         device: &cpal::Device,
         config: &cpal::StreamConfig,
         queue: MonitorQueue,
-        mut playback: MonitorPlayback,
         failed: Arc<AtomicBool>,
     ) -> Result<cpal::Stream, cpal::BuildStreamError>
     where
         T: cpal::SizedSample + cpal::FromSample<f32>,
     {
         let channels = usize::from(config.channels).max(1);
+        let mut mono = Vec::new();
         device.build_output_stream(
             config,
             move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
-                let mut queue = queue.lock().unwrap();
+                mono.resize(data.len() / channels, 0.0);
+                queue.lock().unwrap().pull(&mut mono);
                 // The voice is mono: every speaker plays the same sample.
-                for frame in data.chunks_mut(channels) {
-                    frame.fill(<T as cpal::Sample>::from_sample(playback.next(&mut queue)));
+                for (frame, sample) in data.chunks_mut(channels).zip(&mono) {
+                    frame.fill(<T as cpal::Sample>::from_sample(*sample));
                 }
             },
             move |_| failed.store(true, Ordering::SeqCst),
@@ -265,15 +311,23 @@ fn open_monitor(
         )
     }
 
-    let device = cpal::default_host().default_output_device().ok_or("no audio output")?;
+    let host = cpal::default_host();
+    let device = host
+        .output_devices()
+        .ok()
+        .and_then(|mut devices| {
+            devices.find(|device| device.name().map(|name| name == wanted).unwrap_or(false))
+        })
+        .or_else(|| host.default_output_device())
+        .ok_or("no audio output")?;
     let config = device.default_output_config().map_err(|e| e.to_string())?;
-    let playback = MonitorPlayback::new(input_rate, config.sample_rate().0);
+    queue.lock().unwrap().open(config.sample_rate().0);
     let format = config.sample_format();
     let config = config.into();
     let stream = match format {
-        cpal::SampleFormat::F32 => stream::<f32>(&device, &config, queue, playback, failed),
-        cpal::SampleFormat::I16 => stream::<i16>(&device, &config, queue, playback, failed),
-        cpal::SampleFormat::U16 => stream::<u16>(&device, &config, queue, playback, failed),
+        cpal::SampleFormat::F32 => stream::<f32>(&device, &config, queue, failed),
+        cpal::SampleFormat::I16 => stream::<i16>(&device, &config, queue, failed),
+        cpal::SampleFormat::U16 => stream::<u16>(&device, &config, queue, failed),
         other => return Err(format!("unsupported sample format {other:?}")),
     }
     .map_err(|e| e.to_string())?;
@@ -302,11 +356,13 @@ pub fn start_microphone(
                 .find(|device| device.name().map(|name| name == wanted).unwrap_or(false))
                 .or_else(|| host.default_input_device())
                 .ok_or("no microphone")?;
+            // The user's own voice is described once per microphone.
+            clone.listen_to(&device.name().unwrap_or_default());
             let config = device.default_input_config().map_err(|e| e.to_string())?;
             let channels = usize::from(config.channels());
             let rate = config.sample_rate().0;
             recorder.rate.store(rate, Ordering::SeqCst);
-            let monitor = MonitorQueue::default();
+            let monitor: MonitorQueue = Arc::new(Mutex::new(Playout::new(rate)));
             let pending = Arc::<Pending>::default();
             let mut feed =
                 MonitorFeed::new(voice.clone(), monitor.clone(), rate, clone.clone(), pending.clone());
@@ -363,6 +419,7 @@ pub fn start_microphone(
 
             // The speakers are opened and closed here as the user turns the monitor on and off.
             let mut speaker = None;
+            let mut playing_on = String::new();
             let speaker_failed = Arc::new(AtomicBool::new(false));
             while running.load(Ordering::SeqCst) {
                 thread::sleep(LEVEL_INTERVAL);
@@ -374,11 +431,14 @@ pub fn start_microphone(
                 let _ = app.emit("mic-level", value);
 
                 let lost = speaker_failed.swap(false, Ordering::SeqCst);
-                if speaker.is_some() && (lost || !voice.monitor()) {
+                // Another output was chosen: the monitor moves to it.
+                let moved = voice.output() != playing_on;
+                if speaker.is_some() && (lost || moved || !voice.monitor()) {
                     speaker = None;
-                } else if speaker.is_none() && voice.monitor() {
-                    monitor.lock().unwrap().clear();
-                    speaker = open_monitor(monitor.clone(), rate, speaker_failed.clone()).ok();
+                }
+                if speaker.is_none() && voice.monitor() && !lost {
+                    playing_on = voice.output();
+                    speaker = open_monitor(monitor.clone(), &playing_on, speaker_failed.clone()).ok();
                 }
                 // No output, or it went away: the monitor is off again and the interface is told.
                 if voice.monitor() && speaker.is_none() {

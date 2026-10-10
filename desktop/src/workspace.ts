@@ -8,6 +8,7 @@ import {
   type Account,
   type Device,
   type Filter,
+  type Phone,
   type Profile,
   type VoiceEffect,
 } from './bridge';
@@ -36,9 +37,16 @@ const PRESETS_KEY = 'presets';
 const ECONOMY_KEY = 'economy';
 const FILTER_KEY = 'filter';
 const EFFECT_KEY = 'effect';
+const EFFORT_KEY = 'voiceEffort';
+const MIC_KEY = 'microphone';
+const OUTPUT_KEY = 'monitorOutput';
+/** The effort the native side starts with: the third of the four levels. */
+const EFFORT_DEFAULT = 2;
 const VOICE_MAX_BYTES = 20 * 1024 * 1024;
 /** Asking twice before deleting: the second click must come within this delay. */
 const REMOVE_CONFIRM_MS = 3000;
+/** The camera id the native side gives the linked phone, next to those of the webcams. */
+const PHONE_CAMERA = 'phone';
 
 const icon = (path: string) =>
   `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${path}" /></svg>`;
@@ -60,6 +68,8 @@ const icons = {
   person: icon('M12 4a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM4 21a8 8 0 0 1 16 0'),
   signOut: icon('M10 5H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h4M15 8l4 4-4 4M19 12H9'),
   pip: icon('M4 5h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2ZM12 12h7v4h-7z'),
+  reset: icon('M4 5v5h5M5.5 15a7 7 0 1 0 1-7.5L4 10'),
+  phone: icon('M8 3h8a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2ZM11 18h2'),
   headphones: icon(
     'M4 14v-2a8 8 0 0 1 16 0v2M4 14h3v6H6a2 2 0 0 1-2-2v-4ZM20 14h-3v6h1a2 2 0 0 0 2-2v-4Z',
   ),
@@ -275,6 +285,7 @@ const MARKUP = `
           <div class="row">
             <select id="camera" aria-label="${t.camera}"></select>
             <button class="btn" id="camera-toggle">${t.start}</button>
+            <button class="btn ghost square" id="phone" aria-label="${t.phoneCamera}" aria-pressed="false" title="${t.phoneCameraHint}">${icons.phone}</button>
             <button class="btn ghost square" id="pip" aria-label="${t.pip}" title="${t.pipHint}">${icons.pip}</button>
           </div>
           <div class="preview">
@@ -312,6 +323,23 @@ const MARKUP = `
           <div class="row monitor-row">
             <button class="btn ghost small" id="monitor" aria-pressed="false">${icons.headphones}${t.monitor}</button>
             <p class="muted fine">${t.monitorHint}</p>
+          </div>
+          <label class="output-row">
+            <span class="options-label">${t.monitorOutput}</span>
+            <select id="output"></select>
+          </label>
+          <div class="effort">
+            <div class="effort-head">
+              <span class="options-label" id="effort-label">${t.effort}</span>
+              <strong id="effort-name"></strong>
+              <button type="button" class="effort-reset" id="effort-reset" aria-label="${t.effortReset}" title="${t.effortReset}">${icons.reset}</button>
+            </div>
+            <input type="range" class="slider" id="effort" min="0" max="${t.effortNames.length - 1}" step="1" aria-labelledby="effort-label" />
+            <p class="muted fine" id="effort-hint">&nbsp;</p>
+          </div>
+          <div class="row relearn-row">
+            <button class="btn ghost small" id="relearn">${t.relearn}</button>
+            <p class="muted fine" id="relearn-hint">${t.relearnHint}</p>
           </div>
           <div class="options">
             <span class="options-label" id="effects-label">${t.effects}</span>
@@ -377,6 +405,31 @@ const MARKUP = `
       <p class="muted fine">${t.consent}</p>
       ${dialogActions}
     </form>
+  </dialog>
+
+  <dialog class="dialog" id="phone-dialog">
+    <div class="stack">
+      <h2>${t.phoneCamera}</h2>
+      <p class="notice error" hidden role="alert"></p>
+      <div data-step="code">
+        <p class="muted">${t.phoneHint}</p>
+        <img class="qr" id="phone-qr" alt="${t.phoneQr}" />
+        <p class="muted fine">${t.phoneWarning}</p>
+      </div>
+      <div data-step="request">
+        <p id="phone-request"></p>
+        <p class="muted fine">${t.phoneRequestHint}</p>
+      </div>
+      <div data-step="linked"><p id="phone-linked"></p></div>
+      <div data-step="idle"><p class="muted" id="phone-idle"></p></div>
+      <div class="dialog-actions">
+        <button type="button" class="btn ghost" id="phone-close">${t.close}</button>
+        <button type="button" class="btn ghost" id="phone-refuse">${t.refuse}</button>
+        <button type="button" class="btn" id="phone-allow">${t.allow}</button>
+        <button type="button" class="btn" id="phone-new">${t.phoneNewCode}</button>
+        <button type="button" class="btn stop" id="phone-unlink">${t.disconnect}</button>
+      </div>
+    </div>
   </dialog>
 
   <dialog class="dialog" id="preset-dialog">
@@ -459,10 +512,32 @@ export function mountWorkspace(root: HTMLElement, account: Account, hooks: Hooks
   }
 
   // ── Settings
+  // How much delay is spent on a cleaner cloned voice. The native side answers with the delay.
+  const effort = $<HTMLInputElement>('#effort');
+  const setEffort = async (level: number) => {
+    effort.value = String(level);
+    effort.style.setProperty('--fill', `${(level / Number(effort.max)) * 100}%`);
+    effort.setAttribute('aria-valuetext', t.effortNames[level] ?? '');
+    $('#effort-name').textContent = t.effortNames[level] ?? '';
+    $('#effort-reset').hidden = level === EFFORT_DEFAULT;
+    store(EFFORT_KEY, level);
+    try {
+      $('#effort-hint').textContent = fmt(t.effortHint, { ms: await bridge.setVoiceEffort(level) });
+    } catch (err) {
+      warn(err);
+    }
+  };
+  effort.addEventListener('input', () => void setEffort(Number(effort.value)));
+  $('#effort-reset').addEventListener('click', () => void setEffort(EFFORT_DEFAULT));
+
   const setEconomy = (on: boolean) => {
     for (const toggle of all<HTMLInputElement>('.economy-toggle')) toggle.checked = on;
     store(ECONOMY_KEY, on);
-    bridge.setEconomy(on).catch(warn);
+    bridge
+      .setEconomy(on)
+      // Economy mode lengthens the delay of the cloned voice: the hint follows.
+      .then(() => setEffort(Number(effort.value)))
+      .catch(warn);
   };
   for (const toggle of all<HTMLInputElement>('.economy-toggle')) {
     toggle.addEventListener('change', () => setEconomy(toggle.checked));
@@ -593,7 +668,7 @@ export function mountWorkspace(root: HTMLElement, account: Account, hooks: Hooks
         tint: voice.id,
         active: voice.id === activeVoice,
         onPick: () => selectVoice(voice.id),
-        onRemove: () => removeProfile('voice', voice.id),
+        onRemove: voice.included ? undefined : () => removeProfile('voice', voice.id),
       })),
     ]);
 
@@ -799,6 +874,82 @@ export function mountWorkspace(root: HTMLElement, account: Account, hooks: Hooks
     }
   });
 
+  // A phone as the camera. It scans a QR code, then waits: nothing comes in until the request
+  // is allowed here. Once linked it is one more camera in the list.
+  const phoneDialog = $<HTMLDialogElement>('#phone-dialog');
+  const phoneNotice = phoneDialog.querySelector<HTMLElement>('.notice')!;
+  type PhoneStep = 'code' | 'request' | 'linked' | 'idle';
+  let phoneStep: PhoneStep = 'idle';
+  let phone: Phone | null = null;
+  let webcams: Device[] = [];
+  const phoneName = (from: Phone) => `${from.device || t.phone} (${from.address})`;
+
+  const fillCameras = () => {
+    const kept = cameraSelect.value;
+    const cameras = phone
+      ? [...webcams, { id: PHONE_CAMERA, name: t.phoneCamera }]
+      : webcams;
+    fillSelect(cameraSelect, cameras, t.noCamera);
+    // A phone that has just been linked is what the user wants to see, unless a camera runs.
+    const wanted = phone && !cameraOn ? PHONE_CAMERA : kept;
+    if (cameras.some((camera) => camera.id === wanted)) cameraSelect.value = wanted;
+    cameraToggle.disabled = cameras.length === 0;
+    if (cameraOn) cameraSelect.disabled = true;
+  };
+  const showPhoneStep = (step: PhoneStep) => {
+    phoneStep = step;
+    for (const part of phoneDialog.querySelectorAll<HTMLElement>('[data-step]')) {
+      part.hidden = part.dataset.step !== step;
+    }
+    $('#phone-close').hidden = step === 'request';
+    $('#phone-refuse').hidden = step !== 'request';
+    $('#phone-allow').hidden = step !== 'request';
+    $('#phone-new').hidden = step !== 'idle';
+    $('#phone-unlink').hidden = step !== 'linked';
+  };
+  const setPhone = (linked: Phone | null) => {
+    phone = linked;
+    $('#phone').setAttribute('aria-pressed', String(linked !== null));
+    if (linked) $('#phone-linked').textContent = fmt(t.phoneLinked, { phone: phoneName(linked) });
+    fillCameras();
+  };
+  const phoneFailed = (err: unknown) => {
+    if (hooks.sessionError(err)) return phoneDialog.close();
+    phoneNotice.textContent = errorMessage(err);
+    phoneNotice.hidden = false;
+  };
+  const showPhoneCode = async () => {
+    phoneNotice.hidden = true;
+    $('#phone-idle').textContent = '';
+    try {
+      const offer = await bridge.phoneLink();
+      $<HTMLImageElement>('#phone-qr').src = `data:image/svg+xml,${encodeURIComponent(offer.qr)}`;
+      showPhoneStep('code');
+    } catch (err) {
+      showPhoneStep('idle');
+      phoneFailed(err);
+    }
+  };
+  $('#phone').addEventListener('click', () => {
+    phoneDialog.showModal();
+    if (phone) showPhoneStep('linked');
+    else if (phoneStep === 'idle') void showPhoneCode();
+  });
+  $('#phone-new').addEventListener('click', () => void showPhoneCode());
+  $('#phone-close').addEventListener('click', () => phoneDialog.close());
+  $('#phone-allow').addEventListener('click', () => bridge.phoneAnswer(true).catch(phoneFailed));
+  $('#phone-refuse').addEventListener('click', () => phoneDialog.close());
+  $('#phone-unlink').addEventListener('click', () => {
+    bridge.phoneUnlink().catch(warn);
+    phoneDialog.close();
+  });
+  // Closed with a code still on screen, or a request unanswered: the code is withdrawn, which
+  // refuses the request. A phone already linked stays.
+  phoneDialog.addEventListener('close', () => {
+    if (phoneStep === 'code' || phoneStep === 'request') bridge.phoneUnlink().catch(warn);
+  });
+  showPhoneStep('idle');
+
   $('#pip').addEventListener('click', () => {
     notice.hidden = true;
     bridge.togglePip().catch(warn);
@@ -834,6 +985,22 @@ export function mountWorkspace(root: HTMLElement, account: Account, hooks: Hooks
   const meter = $('#meter');
   const meterFill = $('#meter-fill');
   const monitorToggle = $<HTMLButtonElement>('#monitor');
+  const outputSelect = $<HTMLSelectElement>('#output');
+  outputSelect.append(new Option(t.outputDefault, ''));
+  outputSelect.addEventListener('change', () => {
+    store(OUTPUT_KEY, outputSelect.value);
+    bridge.setMonitorOutput(outputSelect.value).catch(warn);
+  });
+  micSelect.addEventListener('change', () => store(MIC_KEY, micSelect.value));
+  const relearn = $<HTMLButtonElement>('#relearn');
+  relearn.addEventListener('click', () => {
+    bridge
+      .relearnOwnVoice()
+      .then(() => {
+        $('#relearn-hint').textContent = t.relearnDone;
+      })
+      .catch(warn);
+  });
   let micOn = false;
   let monitorOn = false;
 
@@ -912,6 +1079,28 @@ export function mountWorkspace(root: HTMLElement, account: Account, hooks: Hooks
       notice.textContent = t.monitorEnded;
       notice.hidden = false;
     }),
+    bridge.onPhoneRequest((from) => {
+      $('#phone-request').textContent = fmt(t.phoneRequest, { phone: phoneName(from) });
+      showPhoneStep('request');
+      if (!phoneDialog.open) phoneDialog.showModal();
+    }),
+    bridge.onPhoneLinked((linked) => {
+      setPhone(linked);
+      showPhoneStep('linked');
+    }),
+    bridge.onPhoneEnded(() => {
+      const wasLinked = phone !== null;
+      const wasShown = wasLinked && cameraOn && cameraSelect.value === PHONE_CAMERA;
+      // A code nobody scanned in time says so; a refusal or a hang-up needs no words here.
+      $('#phone-idle').textContent = phoneStep === 'code' ? t.phoneExpired : '';
+      showPhoneStep('idle');
+      if (wasShown) setCamera(false);
+      setPhone(null);
+      if (!wasLinked) return;
+      if (phoneDialog.open) phoneDialog.close();
+      notice.textContent = t.phoneEnded;
+      notice.hidden = false;
+    }),
     bridge.onCaptureEnded((source) => {
       if (source === 'camera') {
         setCamera(false);
@@ -929,6 +1118,8 @@ export function mountWorkspace(root: HTMLElement, account: Account, hooks: Hooks
 
   setCamera(false);
   setMic(false);
+  const keptEffort = Number(stored<unknown>(EFFORT_KEY, EFFORT_DEFAULT));
+  effort.value = String(keptEffort in t.effortNames ? keptEffort : EFFORT_DEFAULT);
   setEconomy(stored(ECONOMY_KEY, false));
   // The native side may still hold the face of a previous screen: start from none.
   void bridge.clearFace().catch(() => undefined);
@@ -942,12 +1133,30 @@ export function mountWorkspace(root: HTMLElement, account: Account, hooks: Hooks
       redraw();
     })
     .catch(warn);
+  // A phone linked before the interface was drawn again, by a change of language for one.
+  bridge
+    .phoneStatus()
+    .then((linked) => linked && setPhone(linked))
+    .catch(warn);
   bridge
     .listDevices()
     .then((devices) => {
-      fillSelect(cameraSelect, devices.cameras, t.noCamera);
+      webcams = devices.cameras;
+      fillCameras();
       fillSelect(micSelect, devices.microphones, t.noMicrophone);
-      cameraToggle.disabled = devices.cameras.length === 0;
+      // The microphone and the output chosen last time, if they are still plugged in.
+      const keptMic = stored<unknown>(MIC_KEY, '');
+      if (devices.microphones.some((device) => device.id === keptMic)) {
+        micSelect.value = String(keptMic);
+      }
+      for (const device of devices.speakers) {
+        outputSelect.append(new Option(device.name, device.id));
+      }
+      const keptOutput = stored<unknown>(OUTPUT_KEY, '');
+      if (devices.speakers.some((device) => device.id === keptOutput)) {
+        outputSelect.value = String(keptOutput);
+        bridge.setMonitorOutput(outputSelect.value).catch(warn);
+      }
       micToggle.disabled = devices.microphones.length === 0;
       record.disabled = devices.microphones.length === 0;
       monitorToggle.disabled = devices.microphones.length === 0;
