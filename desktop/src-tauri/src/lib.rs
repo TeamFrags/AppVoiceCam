@@ -59,6 +59,7 @@ struct AppState {
     economy: Arc<AtomicBool>,
     /// Camera filter, as a `Filter` code: read by the capture thread for every frame.
     filter: Arc<AtomicU8>,
+    filter_intensity: Arc<AtomicU8>,
     voice: Arc<VoiceSettings>,
     voice_clone: Arc<VoiceClone>,
     cancel_sign_in: Notify,
@@ -190,6 +191,7 @@ async fn start_camera(app: AppHandle, state: State<'_, AppState>, id: String) ->
             state.face.clone(),
             state.economy.clone(),
             state.filter.clone(),
+            state.filter_intensity.clone(),
             camera,
         );
         return Ok(());
@@ -200,6 +202,7 @@ async fn start_camera(app: AppHandle, state: State<'_, AppState>, id: String) ->
         state.face.clone(),
         state.economy.clone(),
         state.filter.clone(),
+        state.filter_intensity.clone(),
         &id,
     )
 }
@@ -296,6 +299,11 @@ fn set_filter(state: State<'_, AppState>, filter: Filter) {
     state.filter.store(filter as u8, Ordering::Relaxed);
 }
 
+#[tauri::command]
+fn set_filter_intensity(state: State<'_, AppState>, intensity: u8) {
+    state.filter_intensity.store(intensity, Ordering::Relaxed);
+}
+
 /// Opens the floating camera window, or closes it if it is open. Returns whether it is open.
 /// It receives the same frames as the main window and can do nothing but show them.
 #[tauri::command]
@@ -372,8 +380,27 @@ fn clear_face(state: State<'_, AppState>) {
 /// Applies the chosen face to a still photo: a way to try it without a camera.
 #[tauri::command]
 async fn swap_photo(state: State<'_, AppState>, image: String) -> AppResult<String> {
-    with_picture(&state, image, |face, bytes| {
-        let picture = face.swap_photo(bytes)?;
+    let filter_code = state.filter.load(Ordering::Relaxed);
+    let filter = crate::filters::Filter::from_code(filter_code);
+    let intensity = state.filter_intensity.load(Ordering::Relaxed);
+    with_picture(&state, image, move |face, bytes| {
+        let picture = face.swap_photo(bytes, filter, intensity)?;
+        capture::encode_jpeg(&picture, picture.width(), picture.height(), PHOTO_JPEG_QUALITY)
+            .ok_or(face::FaceError::InvalidImage)
+    })
+    .await
+}
+
+/// Applies the chosen face (if any) and the active filter to a still photo. Unlike
+/// `swap_photo` this works without a face selected: the photo gets the filter alone. It is
+/// the still-image equivalent of `process_frame`.
+#[tauri::command]
+async fn preview_photo(state: State<'_, AppState>, image: String) -> AppResult<String> {
+    let filter_code = state.filter.load(Ordering::Relaxed);
+    let filter = crate::filters::Filter::from_code(filter_code);
+    let intensity = state.filter_intensity.load(Ordering::Relaxed);
+    with_picture(&state, image, move |face, bytes| {
+        let picture = face.process_photo(bytes, filter, intensity)?;
         capture::encode_jpeg(&picture, picture.width(), picture.height(), PHOTO_JPEG_QUALITY)
             .ok_or(face::FaceError::InvalidImage)
     })
@@ -523,6 +550,7 @@ pub fn run() {
                 recorder: Arc::default(),
                 economy: Arc::default(),
                 filter: Arc::default(),
+                filter_intensity: Arc::new(AtomicU8::new(5)),
                 voice: Arc::default(),
                 cancel_sign_in: Notify::new(),
             });
@@ -557,12 +585,14 @@ pub fn run() {
             set_voice_effect,
             set_voice_effort,
             set_filter,
+            set_filter_intensity,
             toggle_pip,
             list_library,
             clone_face,
             use_face,
             clear_face,
             swap_photo,
+            preview_photo,
             use_voice,
             clear_voice,
             relearn_own_voice,

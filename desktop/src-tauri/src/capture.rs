@@ -183,6 +183,7 @@ pub fn start_camera(
     face: Arc<FaceSwap>,
     economy: Arc<AtomicBool>,
     filter: Arc<AtomicU8>,
+    filter_intensity: Arc<AtomicU8>,
     id: &str,
 ) -> AppResult<()> {
     let index = match id.parse::<u32>() {
@@ -209,7 +210,7 @@ pub fn start_camera(
                 last_preview = Instant::now();
                 let mut image = frame.decode_image::<RgbFormat>().map_err(|e| e.to_string())?;
                 let (width, height) = (image.width(), image.height());
-                preview(&app, &face, &filter, &mut image, width, height);
+                preview(&app, &face, &filter, &filter_intensity, &mut image, width, height);
             }
             let _ = camera.stop_stream();
             Ok(())
@@ -226,12 +227,14 @@ fn preview(
     app: &AppHandle,
     face: &FaceSwap,
     filter: &AtomicU8,
+    filter_intensity: &AtomicU8,
     rgb: &mut [u8],
     width: u32,
     height: u32,
 ) {
     let filter = Filter::from_code(filter.load(Ordering::Relaxed));
-    let swapped = face.process_frame(rgb, width as usize, height as usize, filter);
+    let intensity = filter_intensity.load(Ordering::Relaxed);
+    let swapped = face.process_frame(rgb, width as usize, height as usize, filter, intensity);
     if let Some(jpeg) = encode_jpeg(rgb, width, height, PREVIEW_JPEG_QUALITY) {
         let _ = app.emit("camera-frame", CameraFrame { jpeg, width, height, swapped });
     }
@@ -245,6 +248,7 @@ pub fn start_phone_camera(
     face: Arc<FaceSwap>,
     economy: Arc<AtomicBool>,
     filter: Arc<AtomicU8>,
+    filter_intensity: Arc<AtomicU8>,
     phone: PhoneCamera,
 ) {
     let running = capture.restart();
@@ -260,7 +264,7 @@ pub fn start_phone_camera(
                 continue;
             }
             last_preview = Instant::now();
-            preview(&app, &face, &filter, &mut rgb, width, height);
+            preview(&app, &face, &filter, &filter_intensity, &mut rgb, width, height);
         }
     });
 }

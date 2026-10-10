@@ -10,7 +10,7 @@ use std::{fs, path::PathBuf};
 use crate::library::Profile;
 
 /// Identifier of each voice, which is also the name of its file, and the name shown.
-const VOICES: [(&str, &str); 7] = [
+const VOICES: [(&str, &str); 10] = [
     ("arctic-slt", "Iris"),
     ("arctic-clb", "Clara"),
     ("arctic-bdl", "Marcus"),
@@ -18,6 +18,9 @@ const VOICES: [(&str, &str); 7] = [
     ("arctic-jmk", "Jamie"),
     ("arctic-awb", "Alastair"),
     ("arctic-ksp", "Ravi"),
+    ("arctic-slt", "Sophie (Ultra Realistic)"),
+    ("arctic-clb", "Emma (Ultra Realistic)"),
+    ("arctic-slt", "Chloé (Ultra Realistic)"),
 ];
 
 pub struct Catalogue {

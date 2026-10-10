@@ -22,19 +22,45 @@ pub enum Filter {
     Dog,
     Mono,
     Sepia,
+    Blurface,
+    Stars,
+    Crown,
+    Clown,
+    Mustache,
+    Devil,
+    Angel,
+    Hearts,
+    Ninja,
+    Fox,
 }
 
 impl Filter {
     pub fn from_code(code: u8) -> Self {
-        [Self::Glasses, Self::Cat, Self::Dog, Self::Mono, Self::Sepia]
-            .into_iter()
-            .find(|filter| *filter as u8 == code)
-            .unwrap_or_default()
+        [
+            Self::Glasses,
+            Self::Cat,
+            Self::Dog,
+            Self::Mono,
+            Self::Sepia,
+            Self::Blurface,
+            Self::Stars,
+            Self::Crown,
+            Self::Clown,
+            Self::Mustache,
+            Self::Devil,
+            Self::Angel,
+            Self::Hearts,
+            Self::Ninja,
+            Self::Fox,
+        ]
+        .into_iter()
+        .find(|filter| *filter as u8 == code)
+        .unwrap_or_default()
     }
 
     /// Whether the filter is drawn on the face, and so needs the detector.
     pub fn needs_face(self) -> bool {
-        matches!(self, Self::Glasses | Self::Cat | Self::Dog)
+        !matches!(self, Self::None | Self::Mono | Self::Sepia)
     }
 }
 
@@ -194,7 +220,72 @@ fn layers(filter: Filter) -> Vec<Layer> {
             out.push(Layer { shape: round([nose[0], nose[1] - 1.0], [10.5, 7.5]), colour: [30, 24, 26], opacity: 1.0 });
             out.push(Layer { shape: round([nose[0] - 3.5, nose[1] - 4.0], [3.2, 1.6]), colour: WHITE, opacity: 0.45 });
         }
-        Filter::None | Filter::Mono | Filter::Sepia => {}
+        Filter::Stars => {
+            for (cx, cy) in [(30.0, -15.0), (56.0, -30.0), (82.0, -15.0)] {
+                let t1 = Shape::Triangle([[cx - 8.0, cy + 4.0], [cx + 8.0, cy + 4.0], [cx, cy - 10.0]]);
+                let t2 = Shape::Triangle([[cx - 8.0, cy - 4.0], [cx + 8.0, cy - 4.0], [cx, cy + 10.0]]);
+                out.push(Layer { shape: t1, colour: [255, 255, 50], opacity: 1.0 });
+                out.push(Layer { shape: t2, colour: [255, 255, 50], opacity: 1.0 });
+            }
+        }
+        Filter::Crown => {
+            let base = Shape::Line { from: [20.0, -5.0], to: [92.0, -5.0], width: 12.0 };
+            let point1 = Shape::Triangle([[20.0, 0.0], [44.0, 0.0], [15.0, -40.0]]);
+            let point2 = Shape::Triangle([[44.0, 0.0], [68.0, 0.0], [56.0, -45.0]]);
+            let point3 = Shape::Triangle([[68.0, 0.0], [92.0, 0.0], [97.0, -40.0]]);
+            let colour = [255, 215, 0];
+            out.push(Layer { shape: base, colour, opacity: 1.0 });
+            out.push(Layer { shape: point1, colour, opacity: 1.0 });
+            out.push(Layer { shape: point2, colour, opacity: 1.0 });
+            out.push(Layer { shape: point3, colour, opacity: 1.0 });
+            out.push(Layer { shape: round([15.0, -40.0], [5.0, 5.0]), colour: [255, 0, 0], opacity: 1.0 });
+            out.push(Layer { shape: round([56.0, -45.0], [6.0, 6.0]), colour: [0, 255, 0], opacity: 1.0 });
+            out.push(Layer { shape: round([97.0, -40.0], [5.0, 5.0]), colour: [0, 0, 255], opacity: 1.0 });
+        }
+        Filter::Clown => {
+            out.push(Layer { shape: round([nose[0], nose[1]], [14.0, 14.0]), colour: [220, 20, 20], opacity: 1.0 });
+            out.extend(pair(round([left_eye[0], left_eye[1]], [16.0, 16.0]), [20, 100, 220], 0.5));
+            out.extend(pair(Shape::Triangle([[left_eye[0]-10.0, left_eye[1]-20.0], [left_eye[0]+10.0, left_eye[1]-20.0], [left_eye[0], left_eye[1]-40.0]]), [20, 100, 220], 0.8));
+            out.push(Layer { shape: Shape::Line { from: [30.0, 95.0], to: [82.0, 95.0], width: 8.0 }, colour: [220, 20, 20], opacity: 0.9 });
+        }
+        Filter::Mustache => {
+            let stache = Shape::Ellipse { centre: [38.0, 83.0], radius: [20.0, 6.0], turn: -0.15 };
+            out.extend(pair(stache, [40, 20, 10], 1.0));
+        }
+        Filter::Devil => {
+            let horn = Shape::Triangle([[35.0, 10.0], [45.0, 0.0], [20.0, -35.0]]);
+            out.extend(pair(horn, [220, 30, 30], 1.0));
+        }
+        Filter::Angel => {
+            let halo = Shape::Ellipse { centre: [56.0, -30.0], radius: [40.0, 10.0], turn: 0.0 };
+            out.push(Layer { shape: halo, colour: [255, 230, 100], opacity: 0.6 });
+        }
+        Filter::Hearts => {
+            let h1 = Shape::Ellipse { centre: [left_eye[0] - 5.0, left_eye[1] - 5.0], radius: [6.0, 6.0], turn: 0.0 };
+            let h2 = Shape::Ellipse { centre: [left_eye[0] + 5.0, left_eye[1] - 5.0], radius: [6.0, 6.0], turn: 0.0 };
+            let h3 = Shape::Triangle([
+                [left_eye[0] - 11.0, left_eye[1] - 3.0], 
+                [left_eye[0] + 11.0, left_eye[1] - 3.0], 
+                [left_eye[0], left_eye[1] + 12.0]
+            ]);
+            out.extend(pair(h1, [255, 40, 80], 1.0));
+            out.extend(pair(h2, [255, 40, 80], 1.0));
+            out.extend(pair(h3, [255, 40, 80], 1.0));
+        }
+        Filter::Ninja => {
+            let band = Shape::Line { from: [10.0, 30.0], to: [102.0, 30.0], width: 28.0 };
+            out.push(Layer { shape: band, colour: [20, 20, 20], opacity: 0.95 });
+        }
+        Filter::Fox => {
+            let ear = Shape::Triangle([[15.0, 20.0], [35.0, 0.0], [10.0, -30.0]]);
+            let inner = Shape::Triangle([[19.0, 15.0], [31.0, 2.0], [14.0, -20.0]]);
+            out.extend(pair(ear, [220, 100, 30], 1.0));
+            out.extend(pair(inner, WHITE, 1.0));
+            out.push(Layer { shape: round([nose[0], nose[1]], [8.0, 5.0]), colour: [20, 20, 20], opacity: 1.0 });
+            out.extend(pair(Shape::Line { from: [10.0, 70.0], to: [35.0, 75.0], width: 1.5 }, [20, 20, 20], 0.8));
+            out.extend(pair(Shape::Line { from: [5.0, 80.0], to: [35.0, 80.0], width: 1.5 }, [20, 20, 20], 0.8));
+        }
+        Filter::Blurface | Filter::None | Filter::Mono | Filter::Sepia => {}
     }
     out
 }
@@ -254,6 +345,73 @@ fn grade(rgb: &mut [u8], filter: Filter) {
     }
 }
 
+fn blur_face(rgb: &mut [u8], width: usize, height: usize, landmarks: &[Point; 5], intensity: u8) {
+    let to_face = Similarity::fit(landmarks, &ARCFACE_TEMPLATE);
+    let to_frame = to_face.inverse();
+    let zoom = to_frame.scale();
+    
+    let face_shape = Shape::Ellipse { centre: [56.0, 60.0], radius: [50.0, 65.0], turn: 0.0 };
+    
+    let [left, top, right, bottom] = face_shape.bounds();
+    let corners = [(left, top), (right, top), (left, bottom), (right, bottom)]
+        .map(|(x, y)| to_frame.apply(x, y));
+    let (xs, ys) = (corners.map(|c| c.0), corners.map(|c| c.1));
+    let lowest = |vals: [f32; 4]| vals.into_iter().fold(f32::MAX, f32::min) - 1.0;
+    let highest = |vals: [f32; 4]| vals.into_iter().fold(f32::MIN, f32::max) + 1.0;
+    
+    if highest(xs) < 0.0 || highest(ys) < 0.0 { return; }
+    let x_from = (lowest(xs).max(0.0) as usize).saturating_sub(5);
+    let y_from = (lowest(ys).max(0.0) as usize).saturating_sub(5);
+    let x_to = (highest(xs) as usize + 5).min(width.saturating_sub(1));
+    let y_to = (highest(ys) as usize + 5).min(height.saturating_sub(1));
+    
+    let block_size = (zoom * intensity as f32 * 2.0).max(4.0) as usize;
+    
+    for y in (y_from..=y_to).step_by(block_size) {
+        for x in (x_from..=x_to).step_by(block_size) {
+            let cx = (x + block_size / 2) as f32;
+            let cy = (y + block_size / 2) as f32;
+            let (u, v) = to_face.apply(cx, cy);
+            
+            let cover = (0.5 - face_shape.distance([u, v]) * zoom).clamp(0.0, 1.0);
+            if cover <= 0.0 { continue; }
+            
+            let mut r = 0u32; let mut g = 0u32; let mut b = 0u32;
+            let mut count = 0;
+            for by in y..y+block_size {
+                if by >= height { continue; }
+                for bx in x..x+block_size {
+                    if bx >= width { continue; }
+                    let idx = (by * width + bx) * 3;
+                    r += rgb[idx] as u32;
+                    g += rgb[idx+1] as u32;
+                    b += rgb[idx+2] as u32;
+                    count += 1;
+                }
+            }
+            if count == 0 { continue; }
+            let avg_r = (r / count) as u8;
+            let avg_g = (g / count) as u8;
+            let avg_b = (b / count) as u8;
+            
+            for by in y..y+block_size {
+                if by >= height { continue; }
+                for bx in x..x+block_size {
+                    if bx >= width { continue; }
+                    let (u, v) = to_face.apply(bx as f32, by as f32);
+                    let cover = (0.5 - face_shape.distance([u, v]) * zoom).clamp(0.0, 1.0);
+                    if cover <= 0.0 { continue; }
+                    
+                    let idx = (by * width + bx) * 3;
+                    rgb[idx] = (rgb[idx] as f32 * (1.0 - cover) + avg_r as f32 * cover) as u8;
+                    rgb[idx+1] = (rgb[idx+1] as f32 * (1.0 - cover) + avg_g as f32 * cover) as u8;
+                    rgb[idx+2] = (rgb[idx+2] as f32 * (1.0 - cover) + avg_b as f32 * cover) as u8;
+                }
+            }
+        }
+    }
+}
+
 /// Applies a filter to a packed RGB frame, in place. Accessories need the landmarks of the
 /// face; without them (nobody in view) the frame is left as it is.
 pub fn apply(
@@ -261,13 +419,20 @@ pub fn apply(
     width: usize,
     height: usize,
     filter: Filter,
+    intensity: u8,
     landmarks: Option<&[Point; 5]>,
 ) {
     if rgb.len() != width * height * 3 {
         return;
     }
     match landmarks {
-        Some(landmarks) if filter.needs_face() => draw(rgb, width, height, filter, landmarks),
+        Some(landmarks) if filter.needs_face() => {
+            if filter == Filter::Blurface {
+                blur_face(rgb, width, height, landmarks, intensity);
+            } else {
+                draw(rgb, width, height, filter, landmarks);
+            }
+        }
         _ => grade(rgb, filter),
     }
 }

@@ -289,14 +289,18 @@ const MARKUP = `
             <button class="btn ghost square" id="pip" aria-label="${t.pip}" title="${t.pipHint}">${icons.pip}</button>
           </div>
           <div class="preview">
-            <img id="frame" alt="${t.cameraPreview}" hidden />
+            <img id="frame" alt="${t.cameraPreview}" hidden draggable="false" />
             <span class="live-badge" id="live" hidden>${t.live}</span>
-            <p class="muted" id="frame-empty">${t.previewIdle}</p>
+            <p class="muted" id="frame-empty">${t.dropPhoto}</p>
           </div>
           <p class="muted stat" id="camera-stat">&nbsp;</p>
           <div class="options">
             <span class="options-label" id="filters-label">${t.filters}</span>
             <div class="chips" id="filters" role="radiogroup" aria-labelledby="filters-label"></div>
+          </div>
+          <div class="options" id="filter-intensity-container" hidden>
+            <span class="options-label" id="intensity-label">${t.filterIntensity}</span>
+            <input type="range" id="filter-intensity" min="1" max="10" value="5" aria-label="${t.filterIntensity}" />
           </div>
           <div class="row face-row">
             <p class="muted" id="face-hint"></p>
@@ -557,9 +561,12 @@ export function mountWorkspace(root: HTMLElement, account: Account, hooks: Hooks
 
   const photoTry = $<HTMLButtonElement>('#photo-try');
   let cameraOn = false;
+  let currentPhotoDataUrl: string | null = null;
+  let updateTestPhoto = async (): Promise<void> => {};
+
   const syncFace = () => {
-    // A still photo would be replaced at once by the next camera frame.
-    photoTry.disabled = cameraOn || activeFace === null;
+    // A still photo can be tested whenever the camera is off, even before a face is picked.
+    photoTry.disabled = cameraOn;
     $('#face-hint').textContent = activeFace === null ? t.faceIdle : t.faceReady;
   };
 
@@ -574,6 +581,9 @@ export function mountWorkspace(root: HTMLElement, account: Account, hooks: Hooks
     }
     syncFace();
     redraw();
+    if (currentPhotoDataUrl && !cameraOn) {
+      void updateTestPhoto();
+    }
   };
   const selectVoice = async (id: string | null) => {
     notice.hidden = true;
@@ -858,8 +868,12 @@ export function mountWorkspace(root: HTMLElement, account: Account, hooks: Hooks
     cameraSelect.disabled = on || cameraSelect.options[0]?.value === '';
     syncFace();
     if (!on) {
-      frame.hidden = true;
-      frameEmpty.hidden = false;
+      if (currentPhotoDataUrl) {
+        void updateTestPhoto();
+      } else {
+        frame.hidden = true;
+        frameEmpty.hidden = false;
+      }
       cameraStat.innerHTML = '&nbsp;';
     }
   };
@@ -954,21 +968,35 @@ export function mountWorkspace(root: HTMLElement, account: Account, hooks: Hooks
     notice.hidden = true;
     bridge.togglePip().catch(warn);
   });
+  const filterIntensityContainer = $<HTMLDivElement>('#filter-intensity-container');
+  const filterIntensity = $<HTMLInputElement>('#filter-intensity');
+  
   chips<Filter>($('#filters'), t.filterNames, FILTER_KEY, (filter) => {
     bridge.setFilter(filter).catch(warn);
+    if (filter === 'blurface') {
+      filterIntensityContainer.hidden = false;
+    } else {
+      filterIntensityContainer.hidden = true;
+    }
+    if (currentPhotoDataUrl && !cameraOn) {
+      void updateTestPhoto();
+    }
   });
 
-  // Try the chosen face on a still photo, without a camera.
-  const photoFile = $<HTMLInputElement>('#photo-file');
-  photoTry.addEventListener('click', () => photoFile.click());
-  photoFile.addEventListener('change', async () => {
-    const file = photoFile.files?.[0];
-    photoFile.value = '';
-    if (!file) return;
-    notice.hidden = true;
+  filterIntensity.addEventListener('input', () => {
+    bridge.setFilterIntensity(Number(filterIntensity.value)).catch(warn);
+    if (currentPhotoDataUrl && !cameraOn) {
+      void updateTestPhoto();
+    }
+  });
+
+  // Try the chosen face / filter on a still photo, without a camera.
+  const preview = $<HTMLDivElement>('.preview');
+  updateTestPhoto = async () => {
+    if (!currentPhotoDataUrl || cameraOn) return;
     photoTry.classList.add('loading');
     try {
-      const swapped = await bridge.swapPhoto(base64(await readAsDataUrl(file)));
+      const swapped = await bridge.previewPhoto(base64(currentPhotoDataUrl));
       frame.src = `data:image/jpeg;base64,${swapped}`;
       frame.hidden = false;
       frameEmpty.hidden = true;
@@ -977,7 +1005,78 @@ export function mountWorkspace(root: HTMLElement, account: Account, hooks: Hooks
     } finally {
       photoTry.classList.remove('loading');
     }
+  };
+
+  const loadTestPhoto = async (file: File) => {
+    notice.hidden = true;
+    try {
+      currentPhotoDataUrl = await readAsDataUrl(file);
+      await updateTestPhoto();
+    } catch (err) {
+      warn(err);
+    }
+  };
+
+  preview.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    preview.classList.add('drag-over');
   });
+  preview.addEventListener('dragleave', () => {
+    preview.classList.remove('drag-over');
+  });
+  preview.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    preview.classList.remove('drag-over');
+    const file = e.dataTransfer?.files?.[0];
+    if (file && file.type.startsWith('image/')) {
+      await loadTestPhoto(file);
+    }
+  });
+
+  const photoFile = $<HTMLInputElement>('#photo-file');
+  photoTry.addEventListener('click', () => photoFile.click());
+  photoFile.addEventListener('change', async () => {
+    const file = photoFile.files?.[0];
+    photoFile.value = '';
+    if (file) await loadTestPhoto(file);
+  });
+
+  // Drag to reposition the preview
+  let isDragging = false;
+  let dragX = 0, dragY = 0;
+  let bgPosX = 50, bgPosY = 50;
+
+  const startDrag = (e: MouseEvent | TouchEvent) => {
+    isDragging = true;
+    const touch = 'touches' in e ? e.touches[0] : null;
+    dragX = touch ? touch.clientX : (e as MouseEvent).clientX;
+    dragY = touch ? touch.clientY : (e as MouseEvent).clientY;
+  };
+  const moveDrag = (e: MouseEvent | TouchEvent) => {
+    if (!isDragging) return;
+    const touch = 'touches' in e ? e.touches[0] : null;
+    const clientX = touch ? touch.clientX : (e as MouseEvent).clientX;
+    const clientY = touch ? touch.clientY : (e as MouseEvent).clientY;
+    
+    bgPosX -= ((clientX - dragX) / frame.clientWidth) * 100;
+    bgPosY -= ((clientY - dragY) / frame.clientHeight) * 100;
+    
+    bgPosX = Math.max(0, Math.min(100, bgPosX));
+    bgPosY = Math.max(0, Math.min(100, bgPosY));
+    
+    frame.style.objectPosition = `${bgPosX}% ${bgPosY}%`;
+    
+    dragX = clientX;
+    dragY = clientY;
+  };
+  const endDrag = () => { isDragging = false; };
+
+  frame.addEventListener('mousedown', (e) => { e.preventDefault(); startDrag(e); });
+  frame.addEventListener('touchstart', startDrag, { passive: true });
+  window.addEventListener('mousemove', moveDrag);
+  window.addEventListener('touchmove', moveDrag, { passive: true });
+  window.addEventListener('mouseup', endDrag);
+  window.addEventListener('touchend', endDrag);
 
   // ── Microphone
   const micSelect = $<HTMLSelectElement>('#mic');

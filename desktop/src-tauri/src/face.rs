@@ -480,11 +480,34 @@ impl FaceSwap {
     }
 
     /// Swaps the face of a still photo and returns it as packed RGB with its size.
-    pub fn swap_photo(&self, image: &[u8]) -> Result<image::RgbImage, FaceError> {
+    pub fn swap_photo(&self, image: &[u8], filter: Filter, intensity: u8) -> Result<image::RgbImage, FaceError> {
         let identity = self.identity.lock().unwrap().clone().ok_or(FaceError::NoFace)?;
         let mut picture = decode(image)?;
         let (width, height) = (picture.width() as usize, picture.height() as usize);
-        self.with_engine(|engine| engine.swap(&mut picture, width, height, &identity))?;
+        let found = self.with_engine(|engine| engine.swap(&mut picture, width, height, &identity));
+        filters::apply(&mut picture, width, height, filter, intensity, found.as_ref().ok());
+        found?;
+        Ok(picture)
+    }
+
+    /// Applies the face swap (if a face is chosen) and the filter to a still photo. Works
+    /// without a face chosen: the filter is applied alone, which is enough to test accessories.
+    pub fn process_photo(&self, image: &[u8], filter: Filter, intensity: u8) -> Result<image::RgbImage, FaceError> {
+        let mut picture = decode(image)?;
+        let (width, height) = (picture.width() as usize, picture.height() as usize);
+        let identity = self.identity.lock().unwrap().clone();
+        let found = match &identity {
+            Some(identity) => self.with_engine(|engine| engine.swap(&mut picture, width, height, identity)),
+            None if filter.needs_face() => {
+                self.with_engine(|engine| engine.landmarks(&picture, width, height))
+            }
+            None => Err(FaceError::NoFace),
+        };
+        filters::apply(&mut picture, width, height, filter, intensity, found.as_ref().ok());
+        // If a face was chosen but not found, report the error. Otherwise the photo is fine.
+        if identity.is_some() {
+            found?;
+        }
         Ok(picture)
     }
 
@@ -496,6 +519,7 @@ impl FaceSwap {
         width: usize,
         height: usize,
         filter: Filter,
+        intensity: u8,
     ) -> bool {
         let identity = self.identity.lock().unwrap().clone();
         // The swap has already found the face: an accessory reuses its landmarks.
@@ -506,7 +530,7 @@ impl FaceSwap {
             }
             None => Err(FaceError::NoFace),
         };
-        filters::apply(rgb, width, height, filter, found.as_ref().ok());
+        filters::apply(rgb, width, height, filter, intensity, found.as_ref().ok());
         identity.is_some() && found.is_ok()
     }
 }

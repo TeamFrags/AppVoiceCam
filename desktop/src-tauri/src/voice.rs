@@ -79,7 +79,7 @@ const FADE: usize = HOP;
 /// Measured on a man's voice turned into a woman's, as the likeness (1 is the same wave) of
 /// each frame to a conversion of the whole recording at once, by distance from the end of the
 /// real sound: 0.85 at 10 frames, 0.98 at 15, 0.99 at 19, 1.00 from 25.
-const AHEAD: [usize; 4] = [11 * HOP, 16 * HOP, 20 * HOP, 26 * HOP];
+const AHEAD: [usize; 5] = [11 * HOP, 16 * HOP, 20 * HOP, 26 * HOP, 44 * HOP];
 pub const EFFORT_DEFAULT: u8 = 2;
 pub const EFFORT_MAX: u8 = AHEAD.len() as u8 - 1;
 /// The model needs this much sound before a block to draw it like the whole recording.

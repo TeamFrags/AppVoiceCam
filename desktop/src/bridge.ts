@@ -52,7 +52,7 @@ export interface PhoneOffer {
   seconds: number;
 }
 export type VoiceEffect = 'none' | 'deep' | 'high' | 'robot' | 'echo' | 'radio';
-export type Filter = 'none' | 'glasses' | 'cat' | 'dog' | 'mono' | 'sepia';
+export type Filter = 'none' | 'glasses' | 'cat' | 'dog' | 'mono' | 'sepia' | 'blurface' | 'stars' | 'crown' | 'clown' | 'mustache' | 'devil' | 'angel' | 'hearts' | 'ninja' | 'fox';
 export interface AppError {
   code: string;
   details: Record<string, unknown>;
@@ -90,6 +90,7 @@ export const bridge = {
   /** From 0 (least delay) to 3 (cleanest cloned voice). Returns the delay to expect, in ms. */
   setVoiceEffort: (effort: number) => invoke<number>('set_voice_effort', { effort }),
   setFilter: (filter: Filter) => invoke<void>('set_filter', { filter }),
+  setFilterIntensity: (intensity: number) => invoke<void>('set_filter_intensity', { intensity }),
   /** Opens or closes the floating camera window. Returns whether it is now open. */
   togglePip: () => invoke<boolean>('toggle_pip'),
   library: () => invoke<Profiles>('list_library'),
@@ -112,6 +113,8 @@ export const bridge = {
   setEconomy: (on: boolean) => invoke<void>('set_economy', { on }),
   /** Returns the photo with the chosen face, as a base64 JPEG. */
   swapPhoto: (image: string) => invoke<string>('swap_photo', { image }),
+  /** Returns the photo with the chosen face (if any) and the active filter, as a base64 JPEG. */
+  previewPhoto: (image: string) => invoke<string>('preview_photo', { image }),
   /** Version number of a newer release, or null. */
   checkUpdate: () => invoke<string | null>('check_update'),
   /** Resolves only on failure: on success the application restarts. */
