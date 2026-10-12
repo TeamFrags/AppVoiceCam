@@ -34,6 +34,7 @@ use symphonia::core::{
 use crate::{
     error::AppError,
     face::{self, FaceError},
+    studio::Studio,
 };
 
 const EXTRACTOR_FILE: &str = "tone_extract.onnx";
@@ -83,7 +84,6 @@ const AHEAD: [usize; 5] = [11 * HOP, 16 * HOP, 20 * HOP, 26 * HOP, 44 * HOP];
 pub const EFFORT_DEFAULT: u8 = 2;
 pub const EFFORT_MAX: u8 = AHEAD.len() as u8 - 1;
 /// The model needs this much sound before a block to draw it like the whole recording.
-#[cfg(test)]
 const CONTEXT_MIN: usize = 24 * HOP;
 
 /// How the stream is cut: the length of the blocks and of the sound given after them.
@@ -96,9 +96,11 @@ pub struct Layout {
 impl Layout {
     /// More effort is a cleaner voice and more delay. Economy halves the runs of the model.
     pub fn new(effort: u8, economy: bool) -> Self {
+        let block = if economy { BLOCK_ECONOMY } else { BLOCK_FAST };
         Self {
-            block: if economy { BLOCK_ECONOMY } else { BLOCK_FAST },
-            ahead: AHEAD[usize::from(effort.min(EFFORT_MAX))],
+            block,
+            // Never so much sound after the block that too little is left before it.
+            ahead: AHEAD[usize::from(effort.min(EFFORT_MAX))].min(HEARD - block - CONTEXT_MIN),
         }
     }
 
@@ -134,7 +136,12 @@ const LEVEL_SPEECH: f32 = 0.3;
 /// How long it takes the live level to follow a voice that gets louder, and one that gets
 /// quieter. Slow on the way down: a soft word is not a change of volume.
 const LEVEL_RISE_SECONDS: f32 = 0.4;
-const LEVEL_FALL_SECONDS: f32 = 6.0;
+const LEVEL_FALL_SECONDS: f32 = 30.0;
+/// A soft word is brought up to the level of the rest for the models, by this much at most,
+/// and brought back down once drawn: it is heard as softly as it was said. Left soft, it was
+/// drawn badly (measured against the same speech at full level: 3.4 dB off at a third of the
+/// level, 5.0 dB at a tenth) and, below a twentieth, taken for silence and not played at all.
+const LIFT_MAX: f32 = 12.0;
 /// Quieter than this, a microphone hears no one yet: its hiss is left as it is.
 const LEVEL_FLOOR: f32 = 0.004;
 /// Speech stands at least this far above the background of the room. Brought up as if it were
@@ -412,28 +419,38 @@ struct Leveller {
     /// Loudness of the room when no one speaks. None until something was heard.
     noise: Option<f32>,
     gain: f32,
+    /// How much more the sound now going in is brought up, for being softer than the rest.
+    lift: f32,
     /// Off: the sound is left as it is.
     on: bool,
 }
 
 impl Leveller {
     fn new() -> Self {
-        Self { speech: 0.0, noise: None, gain: 1.0, on: true }
+        Self { speech: 0.0, noise: None, gain: 1.0, lift: 1.0, on: true }
     }
 
-    /// Levels a block in place. The gain glides over the block: a jump would be a click.
-    fn apply(&mut self, block: &mut [f32]) {
+    /// Levels a block in place, and adds to `lifts`, for each of its samples, how much it was
+    /// brought up for being soft: what the models draw from it is to be divided by that. The
+    /// gain glides over the block: a jump would be a click.
+    fn apply(&mut self, block: &mut [f32], lifts: &mut Vec<f32>) {
         if !self.on {
+            lifts.extend(std::iter::repeat(1.0).take(block.len()));
             return;
         }
         let level = rms(block);
         let glide = |seconds: f32| 1.0 - (-(block.len() as f32) / (RATE as f32 * seconds)).exp();
+        // The room is what is left in the gaps of speech, which are shorter than a block: the
+        // quietest moment of the block. Weighed over the whole block, a few seconds of speech
+        // without a pause passed for a louder room, and a soft word after them for its noise.
+        let low = block.chunks_exact(HOP).map(rms).fold(level, f32::min);
         let noise = match self.noise {
-            Some(noise) if level > noise => noise + (level - noise) * glide(NOISE_RISE_SECONDS),
-            _ => level,
+            Some(noise) if low > noise => noise + (low - noise) * glide(NOISE_RISE_SECONDS),
+            _ => low,
         };
         self.noise = Some(noise);
-        if level >= LEVEL_FLOOR && level >= noise * LEVEL_OVER_NOISE {
+        let voiced = level >= LEVEL_FLOOR && level >= noise * LEVEL_OVER_NOISE;
+        if voiced {
             if self.speech < LEVEL_FLOOR {
                 // The first speech heard is all there is to go by.
                 self.speech = level;
@@ -447,11 +464,21 @@ impl Leveller {
         let peak = block.iter().fold(0.0f32, |peak, sample| peak.max(sample.abs()));
         let ceiling = LEVEL_CEILING / peak.max(1e-9);
         let (from, to) = (self.gain.min(ceiling), gain_for(self.speech).min(ceiling));
+        // Only a voice is brought up: the room, between two soft words, is left where it is.
+        let lift_max = std::env::var("APP_LIFT_MAX").ok().and_then(|v| v.parse().ok()).unwrap_or(LIFT_MAX); // TEMP
+        let lift = if voiced { (self.speech / level).clamp(1.0, lift_max) } else { 1.0 };
+        let (lifted_from, lifted_to) =
+            ((self.gain * self.lift).min(ceiling).max(from), (to * lift).min(ceiling));
         let last = block.len().max(2) as f32 - 1.0;
         for (at, sample) in block.iter_mut().enumerate() {
-            *sample *= from + (to - from) * at as f32 / last;
+            let turn = at as f32 / last;
+            let (plain, lifted) =
+                (from + (to - from) * turn, lifted_from + (lifted_to - lifted_from) * turn);
+            *sample *= lifted;
+            lifts.push(lifted / plain);
         }
         self.gain = to;
+        self.lift = lifted_to / to;
     }
 }
 
@@ -540,6 +567,8 @@ pub trait Converter {
 pub struct Stream {
     layout: Layout,
     window: Vec<f32>,
+    /// For each sample of the window, how much it was brought up for being soft.
+    lifts: Vec<f32>,
     waiting: Vec<f32>,
     /// Converted sound after the previous block: the start of this one, heard in advance.
     tail: Vec<f32>,
@@ -555,6 +584,7 @@ impl Stream {
         Self {
             layout,
             window: vec![0.0; HEARD],
+            lifts: vec![1.0; HEARD],
             waiting: Vec::new(),
             tail: vec![0.0; FADE],
             speech: Vec::new(),
@@ -594,6 +624,7 @@ impl Stream {
     /// Forgets the sound in progress, not the voice of the user.
     pub fn restart(&mut self) {
         self.window.fill(0.0);
+        self.lifts.fill(1.0);
         self.waiting.clear();
         self.tail.fill(0.0);
     }
@@ -606,8 +637,11 @@ impl Stream {
             self.window.drain(..block);
             let fresh = self.window.len();
             self.window.extend(self.waiting.drain(..block));
-            self.leveller.apply(&mut self.window[fresh..]);
-            let converted = self.step(converter);
+            self.lifts.drain(..block);
+            self.leveller.apply(&mut self.window[fresh..], &mut self.lifts);
+            let mut converted = self.step(converter);
+            // What was said softly is heard softly.
+            converted.iter_mut().zip(&self.lifts).for_each(|(sample, lift)| *sample /= lift);
             // Both conversions of the start of the block are the same wave: no lining up.
             let start = context;
             let fade = |at: usize| {
@@ -689,11 +723,15 @@ pub struct VoiceClone {
     /// Goes up each time the description held is no longer the one to use: whoever converts
     /// starts afresh.
     epoch: AtomicU32,
+    /// The voices trained in advance, which another engine speaks with. One or the other is
+    /// chosen, never both.
+    pub studio: Studio,
 }
 
 impl VoiceClone {
     pub fn new(models: PathBuf) -> Self {
         Self {
+            studio: Studio::new(models.join("studio")),
             models,
             engine: Mutex::new(None),
             target: Mutex::new(None),
@@ -775,12 +813,22 @@ impl VoiceClone {
         self.with_engine(|engine| engine.convert(&warm_up, &embedding, &embedding))?;
         *self.target.lock().unwrap() = Some(Arc::new(embedding));
         self.active.store(true, Ordering::SeqCst);
+        self.studio.clear();
+        Ok(())
+    }
+
+    /// Chooses a studio voice to speak with, in place of a cloned one.
+    pub fn set_studio(&self, id: &str) -> Result<(), VoiceError> {
+        self.studio.select(id)?;
+        self.active.store(false, Ordering::SeqCst);
+        *self.target.lock().unwrap() = None;
         Ok(())
     }
 
     pub fn clear_target(&self) {
         self.active.store(false, Ordering::SeqCst);
         *self.target.lock().unwrap() = None;
+        self.studio.clear();
     }
 
     pub fn speaker(&self) -> Option<(Vec<f32>, usize)> {
@@ -807,8 +855,9 @@ impl VoiceClone {
         }
     }
 
+    /// Whether a voice is chosen, cloned or from the studio.
     pub fn is_active(&self) -> bool {
-        self.active.load(Ordering::Relaxed)
+        self.active.load(Ordering::Relaxed) || self.studio.is_active()
     }
 
     pub fn target(&self) -> Option<Embedding> {
@@ -1020,11 +1069,60 @@ mod tests {
         // A shout after a whisper is turned down at once, not cut flat.
         let mut leveller = Leveller::new();
         let mut whisper: Vec<f32> = sine(200.0, RATE, 0.5).iter().map(|s| s * 0.02).collect();
-        leveller.apply(&mut vec![0.0; BLOCK_FAST]);
-        leveller.apply(&mut whisper);
+        let mut lifts = Vec::new();
+        leveller.apply(&mut vec![0.0; BLOCK_FAST], &mut lifts);
+        leveller.apply(&mut whisper, &mut lifts);
         let mut shout = sine(200.0, RATE, 0.1).iter().map(|s| s * 1.6).collect::<Vec<f32>>();
-        leveller.apply(&mut shout);
+        leveller.apply(&mut shout, &mut lifts);
         assert!(loudest(&shout) <= 1.0, "{}", loudest(&shout));
+    }
+
+    /// Gives the sound back, and keeps how loud the newest sound it was given has been.
+    #[derive(Default)]
+    struct Listener {
+        heard: Vec<f32>,
+    }
+
+    impl Converter for Listener {
+        fn describe(&mut self, _: &[f32]) -> Option<Vec<f32>> {
+            Some(vec![0.0; EMBEDDING])
+        }
+
+        fn convert(&mut self, window: &[f32], _: &[f32]) -> Option<Vec<f32>> {
+            self.heard.push(rms(&window[HEARD - BLOCK_FAST..HEARD]));
+            Some(window.to_vec())
+        }
+    }
+
+    #[test]
+    fn a_soft_word_reaches_the_models_at_full_level_and_is_heard_as_softly_as_it_was_said() {
+        for soft in [0.3, 0.1, 0.04] {
+            let second = RATE as usize;
+            let mut input = vec![0.0; BLOCK_FAST];
+            // Words: a short pause every half second, as in speech.
+            input.extend(sine(200.0, RATE, 6.0).iter().enumerate().map(|(n, sample)| {
+                let word = if n % (second / 2) < second / 10 { 0.0 } else { 1.0 };
+                sample * word * if (2 * second..4 * second).contains(&n) { soft } else { 1.0 }
+            }));
+            let mut stream = Stream::new(Layout::default());
+            let (mut listener, mut output) = (Listener::default(), Vec::new());
+            stream.push(&input, &mut listener, &mut output);
+            let delay = BLOCK_FAST + Layout::default().ahead;
+            let part = |from: f32, to: f32| {
+                rms(&output[delay + (from * RATE as f32) as usize..delay + (to * RATE as f32) as usize])
+            };
+            let (loud, quiet, back) = (part(1.0, 1.9), part(2.6, 3.9), part(4.6, 5.5));
+            assert!((quiet / loud - soft).abs() < soft * 0.1, "{soft}: heard at {}", quiet / loud);
+            assert!((back / loud - 1.0).abs() < 0.05, "{soft}: back at {}", back / loud);
+            // The models were given the soft stretch as loud as the rest, or near enough.
+            let blocks = |seconds: f32| (seconds * RATE as f32) as usize / BLOCK_FAST;
+            let given = &listener.heard[blocks(2.6)..blocks(3.9)];
+            let most = given.iter().copied().fold(0.0, f32::max);
+            assert!(most > LEVEL_TARGET * (soft * LIFT_MAX).min(1.0) * 0.8, "{soft}: given at {most}");
+            // No click where the sound is brought up or back down.
+            let steepest = output.windows(2).map(|pair| (pair[1] - pair[0]).abs()).fold(0.0, f32::max);
+            assert!(steepest < 0.02, "{soft}: jump of {steepest}");
+        }
     }
 
     #[test]

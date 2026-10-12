@@ -313,6 +313,11 @@ const MARKUP = `
       <section class="view split" data-view="voice" hidden>
         <div>
           <h1>${t.voice}</h1>
+          <div class="studio" id="studio-voices" hidden>
+            <h2>${t.studioVoices}</h2>
+            <p class="muted">${t.studioVoicesHint}</p>
+            <div class="grid" id="studio-grid"></div>
+          </div>
           <div class="grid" id="voice-grid"></div>
         </div>
         <div class="card">
@@ -673,20 +678,34 @@ export function mountWorkspace(root: HTMLElement, account: Account, hooks: Hooks
         active: activeVoice === null,
         onPick: () => selectVoice(null),
       },
-      ...voices.map((voice) => ({
+      ...voices
+        .filter((voice) => !voice.studio)
+        .map((voice) => ({
+          name: voice.name,
+          tint: voice.id,
+          active: voice.id === activeVoice,
+          onPick: () => selectVoice(voice.id),
+          onRemove: voice.included ? undefined : () => removeProfile('voice', voice.id),
+        })),
+    ]);
+    // The studio voices have a section of their own, shown when one is installed.
+    const studio = voices.filter((voice) => voice.studio);
+    const studioCount = draw(
+      $('#studio-grid'),
+      studio.map((voice) => ({
         name: voice.name,
         tint: voice.id,
         active: voice.id === activeVoice,
         onPick: () => selectVoice(voice.id),
-        onRemove: voice.included ? undefined : () => removeProfile('voice', voice.id),
       })),
-    ]);
+    );
+    $('#studio-voices').hidden = studioCount === 0;
 
     $('#preset-empty').hidden = presets.length > 0 || query !== '';
     const counts: Record<string, number> = {
       presets: presetCount,
       face: faceCount,
-      voice: voiceCount,
+      voice: voiceCount + studioCount,
     };
     const current = root.querySelector<HTMLElement>('.view:not([hidden])')?.dataset.view ?? '';
     $('#no-results').hidden = (counts[current] ?? 1) > 0;

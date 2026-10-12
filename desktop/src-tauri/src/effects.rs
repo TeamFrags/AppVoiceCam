@@ -21,6 +21,7 @@ use serde::Deserialize;
 
 use crate::{
     denoise::{self, Denoiser},
+    studio,
     voice::{self, Layout, Resampler, Stream, VoiceClone},
 };
 
@@ -567,6 +568,10 @@ pub fn convert_voice(
     };
     let mut epoch = clone.epoch();
     let mut stream = fresh(Layout::default());
+    // The same path for a studio voice, which has its own rates and its own cutting.
+    let mut studio_down = Resampler::new(denoise::RATE, studio::RATE_IN);
+    let mut studio_up = (rate != studio::RATE_OUT).then(|| Resampler::new(studio::RATE_OUT, rate));
+    let mut studio_stream = studio::Stream::new();
     let mut processor = Processor::new(rate);
     let (mut clean, mut low, mut converted, mut ready) =
         (Vec::new(), Vec::new(), Vec::new(), Vec::new());
@@ -580,6 +585,27 @@ pub fn convert_voice(
                 .unwrap();
             std::mem::take(&mut *waiting)
         };
+        if clone.studio.is_active() && settings.monitor() {
+            stream.restart();
+            clean.clear();
+            low.clear();
+            converted.clear();
+            ready.clear();
+            denoiser.process(&input, &mut clean);
+            studio_down.process(&clean, &mut low);
+            studio_stream.push(&low, &mut clone.studio.models(), &mut converted);
+            match &mut studio_up {
+                Some(up) => up.process(&converted, &mut ready),
+                None => ready.extend_from_slice(&converted),
+            }
+            if !ready.is_empty() {
+                let effect = settings.effect();
+                let sound = ready.iter().map(|sample| processor.process(effect, *sample));
+                queue.lock().unwrap().push(sound, Flow::Blocks);
+            }
+            continue;
+        }
+        studio_stream.restart();
         let Some(target) = clone.target().filter(|_| settings.monitor()) else {
             stream.restart();
             continue;

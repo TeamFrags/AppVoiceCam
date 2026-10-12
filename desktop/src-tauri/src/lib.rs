@@ -9,6 +9,7 @@ pub mod filters;
 pub mod library;
 pub mod oauth;
 pub mod phone;
+pub mod studio;
 pub mod update;
 pub mod voice;
 
@@ -353,7 +354,13 @@ async fn with_picture<T: Send + 'static>(
 async fn list_library(state: State<'_, AppState>) -> AppResult<Profiles> {
     require_session(&state).await?;
     let (library, catalogue) = (state.library.clone(), state.catalogue.clone());
-    blocking(move || Ok(library.list(catalogue.list()))).await
+    let clone = state.voice_clone.clone();
+    blocking(move || {
+        let mut included = clone.studio.list();
+        included.extend(catalogue.list());
+        Ok(library.list(included))
+    })
+    .await
 }
 
 /// Clones a face from a picture file: it joins the library once a face is found in it.
@@ -415,6 +422,9 @@ async fn use_voice(state: State<'_, AppState>, id: String) -> AppResult<()> {
     let (library, clone) = (state.library.clone(), state.voice_clone.clone());
     let catalogue = state.catalogue.clone();
     blocking(move || {
+        if clone.studio.has(&id) {
+            return Ok(clone.set_studio(&id)?);
+        }
         let (audio, extension) = match catalogue.voice(&id) {
             Some(audio) => (audio, "wav".to_string()),
             None => library.voice(&id)?,

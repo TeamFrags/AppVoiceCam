@@ -43,6 +43,9 @@ const en = {
   original: 'Original',
   cloneFace: 'Clone a face',
   cloneVoice: 'Clone a voice',
+  studioVoices: 'Studio voices',
+  studioVoicesHint:
+    'Each one is a model trained for hours on a single voice. Fuller sound, at 48 kHz.',
   newPreset: 'New preset',
   name: 'Name',
   choosePhoto: 'Choose a photo…',
@@ -215,6 +218,9 @@ const fr: Messages = {
   original: 'Original',
   cloneFace: 'Cloner un visage',
   cloneVoice: 'Cloner une voix',
+  studioVoices: 'Voix studio',
+  studioVoicesHint:
+    'Chacune est un modèle entraîné pendant des heures sur une seule voix. Un son plus plein, en 48 kHz.',
   newPreset: 'Nouveau preset',
   name: 'Nom',
   choosePhoto: 'Choisir une photo…',
@@ -386,6 +392,9 @@ const es: Messages = {
   original: 'Original',
   cloneFace: 'Clonar una cara',
   cloneVoice: 'Clonar una voz',
+  studioVoices: 'Voces de estudio',
+  studioVoicesHint:
+    'Cada una es un modelo entrenado durante horas con una sola voz. Sonido más lleno, a 48 kHz.',
   newPreset: 'Nuevo preset',
   name: 'Nombre',
   choosePhoto: 'Elegir una foto…',
@@ -558,6 +567,9 @@ const pt: Messages = {
   original: 'Original',
   cloneFace: 'Clonar um rosto',
   cloneVoice: 'Clonar uma voz',
+  studioVoices: 'Vozes de estúdio',
+  studioVoicesHint:
+    'Cada uma é um modelo treinado durante horas com uma só voz. Som mais cheio, a 48 kHz.',
   newPreset: 'Novo preset',
   name: 'Nome',
   choosePhoto: 'Escolher uma foto…',
@@ -729,6 +741,9 @@ const de: Messages = {
   original: 'Original',
   cloneFace: 'Gesicht klonen',
   cloneVoice: 'Stimme klonen',
+  studioVoices: 'Studio-Stimmen',
+  studioVoicesHint:
+    'Jede ist ein Modell, das stundenlang auf eine einzige Stimme trainiert wurde. Vollerer Klang, mit 48 kHz.',
   newPreset: 'Neues Preset',
   name: 'Name',
   choosePhoto: 'Foto wählen…',

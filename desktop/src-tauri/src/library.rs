@@ -50,12 +50,19 @@ pub struct Profile {
     picture: Option<String>,
     /// Comes with the application: it cannot be removed.
     included: bool,
+    /// A studio voice: a model trained on that one voice (see `studio.rs`).
+    studio: bool,
 }
 
 impl Profile {
     /// A voice that comes with the application.
     pub fn included(id: &str, name: &str) -> Self {
-        Self { id: id.to_string(), name: name.to_string(), picture: None, included: true }
+        Self { id: id.to_string(), name: name.to_string(), picture: None, included: true, studio: false }
+    }
+
+    /// A studio voice, which comes with the application too.
+    pub fn studio(id: &str, name: &str) -> Self {
+        Self { studio: true, ..Self::included(id, name) }
     }
 }
 
@@ -148,7 +155,7 @@ impl Library {
                 id: entry.id.clone(),
                 name: entry.name.clone(),
                 picture: fs::read(self.dir.join(&entry.file)).ok().map(|b| STANDARD.encode(b)),
-                included: false,
+                included: false, studio: false,
             })
             .collect();
         let voices = index
@@ -158,7 +165,7 @@ impl Library {
                 id: entry.id.clone(),
                 name: entry.name.clone(),
                 picture: None,
-                included: false,
+                included: false, studio: false,
             })
             .chain(included)
             .collect();
@@ -181,7 +188,7 @@ impl Library {
         let jpeg = jpeg.into_inner();
         let entry = self.store(Kind::Face, name, "jpg", &jpeg)?;
         let picture = Some(STANDARD.encode(jpeg));
-        Ok(Profile { id: entry.id, name: entry.name, picture, included: false })
+        Ok(Profile { id: entry.id, name: entry.name, picture, included: false, studio: false })
     }
 
     /// The portrait of a face, as the image file it was saved in.
@@ -213,7 +220,7 @@ impl Library {
             return Err(AppError::new("invalid_audio"));
         }
         let entry = self.store(Kind::Voice, name, &extension, audio)?;
-        Ok(Profile { id: entry.id, name: entry.name, picture: None, included: false })
+        Ok(Profile { id: entry.id, name: entry.name, picture: None, included: false, studio: false })
     }
 
     pub fn remove(&self, kind: Kind, id: &str) -> AppResult<()> {

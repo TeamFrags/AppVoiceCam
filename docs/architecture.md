@@ -141,6 +141,18 @@ personne ne parle, rien n'est joué. Le modèle tourne quand même pendant les s
 graphique laissée au repos une demi-seconde ralentit, et les premiers mots après une pause
 arrivaient en retard.
 
+**Une voix douce reste douce.** Le modèle dessine mal ce qui est plus faible que son
+entraînement, et ne jouait pas du tout un murmure. Un passage plus doux que le reste de la
+parole est donc remonté avant le modèle (jusqu'à 12 fois), puis redescendu d'autant une fois
+dessiné : il est entendu aussi doucement qu'il a été dit. Un micro faible du début à la fin
+reste, lui, remonté au niveau normal : c'est un signal faible, pas une voix douce.
+
+**Voix du catalogue sans personne réelle.** Les six voix de femme sont des enregistrements du
+synthétiseur Kokoro (Apache-2.0), gardés dans `desktop/voices/` et installés avec les modèles.
+Elles ont été choisies par mesure : son propre une fois converti, et timbres que le modèle
+distingue. Un même fichier n'est jamais proposé sous deux noms (un test le vérifie). Mesures et
+comparaison avec VoiceStudio et OmniVoice : [voix-comparatif.md](voix-comparatif.md).
+
 **Une description de ta voix par micro.** Le modèle doit savoir quelle voix il entend. Cette
 description (256 nombres, aucun son) est apprise en parlant et gardée dans `own-voice/`, un
 fichier par micro ; un bouton l'efface pour la réapprendre.

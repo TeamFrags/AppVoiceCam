@@ -26,6 +26,8 @@ export interface Profile {
   picture: string | null;
   /** Comes with the application: it cannot be removed. */
   included: boolean;
+  /** A studio voice: a model trained on that one voice, shown in a section of its own. */
+  studio: boolean;
 }
 export interface Profiles {
   faces: Profile[];

@@ -22,7 +22,7 @@ fn main() {
     println!("engine loaded, source face read: {:?}", started.elapsed());
 
     let target = fs::read(target).expect("cannot read the target photo");
-    let picture = face.swap_photo(&target).expect("swap failed");
+    let picture = face.swap_photo(&target, Filter::None, 100).expect("swap failed");
     picture.save(result).expect("cannot write the result");
 
     // The first run includes one-off setup on the graphics card: time the following ones.
@@ -31,7 +31,7 @@ fn main() {
     let started = Instant::now();
     const RUNS: u32 = 20;
     for _ in 0..RUNS {
-        assert!(face.process_frame(&mut frame, width, height, Filter::None));
+        assert!(face.process_frame(&mut frame, width, height, Filter::None, 100));
     }
     println!("{width} × {height}: {:?} per frame", started.elapsed() / RUNS);
 }

@@ -1,16 +1,36 @@
 //! Voices that come with the application.
 //!
-//! They are recordings from CMU ARCTIC, which Carnegie Mellon University publishes for any
-//! use, commercial included. They are installed with the models, in a folder of their own,
-//! next to the notice their licence asks to keep. The names shown are made up: they are not
-//! the speakers'.
+//! The `arctic` ones are recordings from CMU ARCTIC, which Carnegie Mellon University
+//! publishes for any use, commercial included. The `kokoro` ones are no one's voice: they were
+//! spoken by the Kokoro speech synthesiser (Apache-2.0), each with another of its voices. The
+//! `qwen` ones are no one's voice either: the Qwen3-TTS synthesiser (Apache-2.0) spoke them,
+//! two with voices it comes with, the others, the two children among them, with voices it made
+//! up from a description. All are installed with the models, in a folder of their own, next to
+//! the notices their licences ask to keep. The names shown are made up: they are not the
+//! speakers'.
 
 use std::{fs, path::PathBuf};
 
 use crate::library::Profile;
 
-/// Identifier of each voice, which is also the name of its file, and the name shown.
-const VOICES: [(&str, &str); 10] = [
+/// Identifier of each voice, which is also the name of its file, and the name shown. One
+/// recording is one voice: the same file under two names would be the same voice twice. The
+/// women's voices of Kokoro go from the lowest to the highest, then those of Qwen3-TTS, then its
+/// two children.
+const VOICES: [(&str, &str); 20] = [
+    ("kokoro-sky", "Sophie"),
+    ("kokoro-kore", "Jeanne"),
+    ("kokoro-river", "Inès"),
+    ("kokoro-emma", "Emma"),
+    ("kokoro-bella", "Chloé"),
+    ("kokoro-jessica", "Léa"),
+    ("qwen-deep", "Hélène"),
+    ("qwen-vivian", "Manon"),
+    ("qwen-warm", "Margot"),
+    ("qwen-anna", "Yuna"),
+    ("qwen-bright", "Camille"),
+    ("qwen-boy", "Tom (kid)"),
+    ("qwen-girl", "Lili (kid)"),
     ("arctic-slt", "Iris"),
     ("arctic-clb", "Clara"),
     ("arctic-bdl", "Marcus"),
@@ -18,9 +38,6 @@ const VOICES: [(&str, &str); 10] = [
     ("arctic-jmk", "Jamie"),
     ("arctic-awb", "Alastair"),
     ("arctic-ksp", "Ravi"),
-    ("arctic-slt", "Sophie (Ultra Realistic)"),
-    ("arctic-clb", "Emma (Ultra Realistic)"),
-    ("arctic-slt", "Chloé (Ultra Realistic)"),
 ];
 
 pub struct Catalogue {
@@ -72,5 +89,13 @@ mod tests {
         assert!(catalogue.voice("other").is_none());
         assert!(catalogue.voice("../voices/arctic-slt").is_none());
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn no_recording_is_offered_under_two_names() {
+        for (at, (id, name)) in VOICES.iter().enumerate() {
+            assert!(VOICES[..at].iter().all(|(other, _)| other != id), "{id} is listed twice");
+            assert!(VOICES[..at].iter().all(|(_, other)| other != name), "{name} is used twice");
+        }
     }
 }

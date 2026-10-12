@@ -28,6 +28,23 @@ session s'arrête. **Rien n'a été écouté** : tout ce qui suit vient de mesur
   et depuis l'étape 3 `noisy` (fabrique un mauvais micro), `dist` (écart avec une référence,
   bruit dans les pauses), `idle` (durée d'un calcul après un repos de la carte graphique).
 - L'interface démarrait au cran 1 alors que le cœur était au cran 2 : les deux sont à 2.
+- 11 octobre 2026, `voice.rs` : **voix douces, fait, tests verts (61).** Un passage doux est
+  remonté pour le modèle puis redescendu d'autant (`LIFT_MAX`, `Stream::lifts`) ; le fond
+  sonore est estimé sur le moment le plus calme de chaque bloc. Le cran « Ultra » en économie
+  ne laisse plus au modèle moins de contexte que le minimum.
+- 11 octobre 2026, `catalogue.rs`, `fetch-models.mjs`, `desktop/voices/` : **étape 7 faite.**
+  Six voix de femme de synthèse (Kokoro) à la place des trois doublons « Ultra Realistic ».
+- 11 octobre 2026, mêmes fichiers : **sept voix Qwen3-TTS ajoutées** (cinq femmes, un garçon,
+  une fillette ; Apache-2.0, aucune personne réelle). Vingt voix au catalogue. Mesurées, pas
+  écoutées. w-okada/voice-changer regardé le même jour : son moteur RVC (MIT) est le candidat
+  pour le second moteur, pas encore essayé.
+- 11 octobre 2026, `studio.rs` (nouveau), `effects.rs`, `lib.rs`, interface : **second moteur
+  (RVC) et première voix studio, Serena.** Tests verts (67). Mesures et fabrication :
+  [voix-studio.md](voix-studio.md). Ni écouté ni lancé dans la vraie fenêtre.
+- `filters.rs` : les appels de test restés à l'ancienne forme empêchaient tous les tests du
+  cœur de compiler ; corrigés.
+- Mesures, comparaison VoiceStudio / OmniVoice / Kokoro et protocole :
+  [voix-comparatif.md](voix-comparatif.md).
 
 ## Mesures de l'étape 3 (10 octobre 2026)
 
@@ -110,12 +127,15 @@ trou réapparaît quand la caméra tourne.
       sortie, voix, visage, effet, qualité, économie, filtre, langue, presets), relu au
       démarrage. Aujourd'hui seuls quelques réglages sont dans le `localStorage` et ni le
       micro ni la voix choisie ne sont retenus.
-- [ ] **Étape 7 — voix de femme** : références propres en 24 kHz. Piste préférée : voix de
-      synthèse Kokoro (Apache-2.0, `kokoro-js` sous Node, aucune personne réelle) ; repli :
-      autres locutrices de CMU ARCTIC (archives `packed/`, 16 kHz).
-- [ ] **Étape 8** : interface et traductions, tests, `ui-preview`, nouveaux échantillons dans
-      `desktop/samples/`, mise à jour de `MANQUE.md` et `architecture.md`, suppression de
-      `zz_lab.rs`.
+- [x] **Étape 7 — voix de femme** : six références de synthèse Kokoro en 24 kHz (Apache-2.0,
+      aucune personne réelle), choisies par mesure parmi quinze. OmniVoice essayé et écarté
+      pour cet usage (voix conçues trop semblables, modèle non commercial).
+- [x] **Étape 7 bis — voix douces** : voir ci-dessus.
+- [~] **Étape 8** : fait : tests, échantillons dans `desktop/samples/voix-2026-10-11/`,
+      `MANQUE.md`, `architecture.md`. Reste : `ui-preview`. `zz_lab.rs` est gardé : le
+      protocole de test (`scripts/voice-protocol.mjs`) s'en sert.
+- [ ] **À faire à l'oreille** : écouter les six voix et les extraits avant/après. Aucune
+      mesure ne dit si une voix est naturelle.
 
 ## Pour reprendre les mesures
 

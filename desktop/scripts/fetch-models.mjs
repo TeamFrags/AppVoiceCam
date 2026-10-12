@@ -10,9 +10,15 @@
 // Licence: the voices that come with the application are recordings from CMU ARCTIC (Carnegie
 // Mellon University), free for any purpose, commercial included, as long as their notice is
 // kept and changes are marked. The notice is written next to them, as LICENCE.txt.
+//
+// Licence: the other voices are in this repository, in desktop/voices/. They are no one's
+// voice: the Kokoro speech synthesiser (Kokoro-82M, Apache-2.0) spoke them, each with another
+// of its voices. scripts/make-voices.mjs makes them again; their notice is NOTICE.txt. The
+// `qwen` ones were spoken by the Qwen3-TTS synthesiser (Apache-2.0), with voices it comes with
+// or made up from a description: scripts/make-voices-qwen.py, notice NOTICE-qwen.txt.
 import { createHash } from 'node:crypto';
 import { createReadStream, createWriteStream, existsSync, mkdirSync, renameSync } from 'node:fs';
-import { readFile, writeFile } from 'node:fs/promises';
+import { copyFile, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -58,6 +64,39 @@ const VOICES = [
   { speaker: 'jmk', sha256: '7f9734ee9b170dc4ab94d7f3ff027c36909f80f7ba74f87a1f5883e9eacc4f9c' },
   { speaker: 'awb', sha256: 'a413bc33717b992dcaf729fb77407d035d2e8e30cd88b8779c4f877e3b50f077' },
   { speaker: 'ksp', sha256: '44ead775d4731d3f4be0c35be528908553569497966f89975b4fb47d3e603bd0' },
+];
+
+// The voices kept in desktop/voices/, as `<id>.wav`. The identifiers are those of
+// src-tauri/src/catalogue.rs.
+const SYNTHETIC_VOICES = [
+  { id: 'kokoro-sky', sha256: '253eada2cacda1064ffc65cff430dc7acc0a5855bd01f47aaa9ae783f60b6dec' },
+  { id: 'kokoro-kore', sha256: '3b9d810dc0b8b0789233d86872004b744b630f23eb8c4ea41c8842a2b7a87357' },
+  {
+    id: 'kokoro-river',
+    sha256: '88c81e1eacc571ce8964d25bcdde0e779ddd84332dd6f1b97169e64123382e7f',
+  },
+  { id: 'kokoro-emma', sha256: 'd42f7eea16b0a10ea36fd48527fafd5a847e8284768ee74c5019d45b3541457c' },
+  {
+    id: 'kokoro-bella',
+    sha256: '5ddf97080d1794dc7c9d5579b136227084bdd9e823f221677caeb2095a5d805b',
+  },
+  {
+    id: 'kokoro-jessica',
+    sha256: 'a612b105e2bdf19835a6d1f9fb5d86c35d6fb49a2afa46fa51e7d2f55d14dd34',
+  },
+  { id: 'qwen-deep', sha256: '5c3423de00573a6ec89d824402200e996d889a904fbc18a73340d2518b868fa9' },
+  {
+    id: 'qwen-vivian',
+    sha256: '46aad43e9a2d1480cc1a6a8ab26f62ba3e76d3914fa5bee8122a4383cf2b601e',
+  },
+  { id: 'qwen-warm', sha256: '376f6ee1d56358ac8f4b509081f0727d218218b120fc0f909e33940eb6b92171' },
+  { id: 'qwen-anna', sha256: '48610bfb6c76534d2d76cbf750cd1d64e7e3c613091879468f18c738954ddf5b' },
+  {
+    id: 'qwen-bright',
+    sha256: '9e249439f8796e77e3bb455a909ca39053ecac323cd99d3ab222b188b1ca738b',
+  },
+  { id: 'qwen-boy', sha256: 'c8b09c9d614d8e996694fdde6535cafebabf9ef4414e9f9047c3f9077aa259f0' },
+  { id: 'qwen-girl', sha256: '7b2dfa9260720673ffeedc614d2e7c9052c3c2eb0f62d466b89e4fda0b81dffa' },
 ];
 
 async function sha256(path) {
@@ -150,6 +189,23 @@ for (const voice of VOICES) {
   await writeFile(path, joined);
   console.log(`ok       ${file}`);
 }
+
+const kept = new URL('../voices/', import.meta.url);
+for (const voice of SYNTHETIC_VOICES) {
+  const file = `${voice.id}.wav`;
+  const path = join(voices, file);
+  if (existsSync(path) && (await sha256(path)) === voice.sha256) {
+    console.log(`ok       ${file}`);
+    continue;
+  }
+  const source = new URL(file, kept);
+  const actual = await sha256(source);
+  if (actual !== voice.sha256) throw new Error(`${file}: unexpected SHA-256 ${actual}`);
+  await copyFile(source, path);
+  console.log(`copied   ${file}`);
+}
+await copyFile(new URL('NOTICE.txt', kept), join(voices, 'NOTICE-kokoro.txt'));
+await copyFile(new URL('NOTICE-qwen.txt', kept), join(voices, 'NOTICE-qwen.txt'));
 
 const licence = join(voices, 'LICENCE.txt');
 if (!existsSync(licence)) {

@@ -455,7 +455,7 @@ mod tests {
 
     fn drawn(filter: Filter) -> Vec<u8> {
         let mut rgb = vec![200u8; SIDE * SIDE * 3];
-        apply(&mut rgb, SIDE, SIDE, filter, Some(&face()));
+        apply(&mut rgb, SIDE, SIDE, filter, 100, Some(&face()));
         rgb
     }
 
@@ -513,29 +513,29 @@ mod tests {
     #[test]
     fn an_accessory_needs_a_face_and_survives_one_that_leaves_the_frame() {
         let mut rgb = vec![200u8; SIDE * SIDE * 3];
-        apply(&mut rgb, SIDE, SIDE, Filter::Cat, None);
+        apply(&mut rgb, SIDE, SIDE, Filter::Cat, 100, None);
         assert!(rgb.iter().all(|value| *value == 200));
 
         for shift in [-400.0, -60.0, 180.0, 900.0] {
             let moved = face().map(|[x, y]| [x + shift, y + shift]);
-            apply(&mut rgb, SIDE, SIDE, Filter::Dog, Some(&moved));
+            apply(&mut rgb, SIDE, SIDE, Filter::Dog, 100, Some(&moved));
         }
         // A frame whose size does not match its buffer is left alone rather than read past.
-        apply(&mut rgb, SIDE, SIDE + 1, Filter::Glasses, Some(&face()));
+        apply(&mut rgb, SIDE, SIDE + 1, Filter::Glasses, 100, Some(&face()));
     }
 
     #[test]
     fn colour_looks_recolour_every_pixel() {
         let mut mono = vec![255, 0, 0, 10, 200, 90];
-        apply(&mut mono, 2, 1, Filter::Mono, None);
+        apply(&mut mono, 2, 1, Filter::Mono, 100, None);
         assert_eq!(mono, [76, 76, 76, 130, 130, 130]);
 
         let mut sepia = vec![128u8; 3];
-        apply(&mut sepia, 1, 1, Filter::Sepia, None);
+        apply(&mut sepia, 1, 1, Filter::Sepia, 100, None);
         assert!(sepia[0] > sepia[1] && sepia[1] > sepia[2], "grey turns warm: {sepia:?}");
 
         let mut untouched = vec![1, 2, 3];
-        apply(&mut untouched, 1, 1, Filter::None, None);
+        apply(&mut untouched, 1, 1, Filter::None, 100, None);
         assert_eq!(untouched, [1, 2, 3]);
     }
 

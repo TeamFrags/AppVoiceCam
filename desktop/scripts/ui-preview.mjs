@@ -46,6 +46,7 @@ function stub(scenario) {
     name,
     picture,
     included: false,
+    studio: false,
   });
   window.__TAURI_INTERNALS__ = {
     metadata: {
@@ -86,7 +87,10 @@ function stub(scenario) {
       if (command === 'list_library') {
         return {
           faces: ['Nova', 'Atlas', 'Mika'].map((name) => profile(name, pixel)),
-          voices: ['Narrator', 'Robot', 'Luna', 'Deep'].map((name) => profile(name)),
+          voices: [
+            ...['Narrator', 'Robot', 'Luna', 'Deep'].map((name) => profile(name)),
+            { ...profile('Serena'), included: true, studio: true },
+          ],
         };
       }
       if (command === 'clone_face') return profile(args.name, pixel);

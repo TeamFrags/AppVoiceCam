@@ -59,7 +59,10 @@ après une première version jugée « horrible » à l'écoute :
   écart avec la voix convertie depuis un son propre passé de 15 à 6 dB ;
 - **le son après chaque bloc** : sans lui la fin de chaque bloc est mal dessinée ;
 - **le volume** : le modèle dessine mal une voix plus faible que celles de son entraînement, et
-  un micro l'est presque toujours. La voix est donc mise à niveau avant la conversion ;
+  un micro l'est presque toujours. La voix est donc mise à niveau avant la conversion. Depuis
+  le 11 octobre 2026, un passage dit doucement est en plus remonté pour le modèle puis
+  redescendu d'autant : il reste doux, sans être abîmé ni coupé (écart mesuré à un dixième du
+  niveau : 5,0 dB avant, 1,5 dB après) ;
 - **la description de la voix de l'utilisateur** : le modèle doit savoir quelle voix il entend,
   et le résultat change beaucoup selon cette description. Elle est refaite à 3, 8, 16 et
   30 secondes de parole, puis gardée dans `own-voice/`, un fichier par micro (256 nombres,
@@ -71,6 +74,12 @@ après une première version jugée « horrible » à l'écoute :
   son enregistrement de référence (micro ou fichier), et un preset associe les deux. Le visage
   cloné et la voix clonée sont réellement appliqués. Les effets de voix (grave, robot…) sont du
   traitement du signal, pas du clonage : ils s'ajoutent après la voix clonée.
+- **Un second moteur de voix existe depuis le 11 octobre 2026** (`studio.rs`, RVC) avec une
+  première voix entraînée par nous, Serena : son en 48 kHz, note de propreté 3,41 en direct
+  (3,38 pour l'autre moteur), retard d'environ 480 ms (540). Il ne clone pas en 20 secondes :
+  chaque voix demande une heure et demie d'entraînement. Détail, et ce qui manque (écoute,
+  hébergement des modèles, autres voix, retard) : [voix-studio.md](voix-studio.md). Ce qui
+  suit décrit l'état d'avant.
 - **Un second moteur de voix, plus ressemblant et plus rapide, reste à ajouter.** OpenVoice
   change le timbre et la hauteur (mesuré : un homme à 92 Hz ressort à 185 Hz vers une voix de
   femme à 206 Hz) mais garde l'intonation et l'accent de celui qui parle, et impose une
@@ -86,16 +95,26 @@ après une première version jugée « horrible » à l'écoute :
   de plus une application Electron avec un serveur Python et PyTorch (5 Go au moins), et il
   génère de la parole à partir d'un texte : il ne transforme pas une voix en direct. Le visage
   utilise déjà les mêmes modèles que Deep-Live-Cam, réécrits en Rust, sans son code.
+- **OmniVoice** (le moteur par défaut de VoiceStudio) a été essayé le 11 octobre 2026 : bonne
+  synthèse en français, mais c'est aussi du texte vers la parole, son modèle est interdit
+  d'usage commercial (CC-BY-NC), et les voix qu'il « conçoit » se ressemblent trop pour faire
+  un catalogue. Détail : [voix-comparatif.md](voix-comparatif.md).
 - **Licences.** Les modèles de visage (`inswapper` et `buffalo_l`, ceux de Deep-Live-Cam) sont
   publiés pour un usage non commercial uniquement. Ils conviennent tant que le projet ne rapporte
   rien ; les vendre dans un abonnement demanderait une licence commerciale ou d'autres modèles.
   Les modèles de voix (OpenVoice V2) sont sous licence MIT : ils peuvent être vendus.
 - **Qui fournit les visages et les voix du catalogue**, et avec quels droits (accord écrit de
-  chaque personne dont le visage ou la voix est proposé). Sept voix sont déjà incluses
-  (`desktop/src-tauri/src/catalogue.rs`) : des enregistrements de CMU ARCTIC, publiés par
-  l'université Carnegie Mellon pour tout usage, commercial compris, à condition de garder leur
-  notice (installée avec eux, `voices/LICENCE.txt`). Elles sont toutes en anglais, cinq hommes
-  et deux femmes, et s'installent avec les modèles. Les visages du catalogue restent à trouver.
+  chaque personne dont le visage ou la voix est proposé). Vingt voix sont incluses
+  (`desktop/src-tauri/src/catalogue.rs`). Sept sont des enregistrements de CMU ARCTIC, publiés
+  par l'université Carnegie Mellon pour tout usage, commercial compris, à condition de garder
+  leur notice (installée avec eux, `voices/LICENCE.txt`) : cinq hommes et deux femmes. Six
+  voix de femme ajoutées le 11 octobre 2026 ne sont la voix de personne : elles viennent du
+  synthétiseur Kokoro (Apache-2.0, notice `voices/NOTICE-kokoro.txt`). Sept autres, ajoutées le
+  même jour, viennent du synthétiseur Qwen3-TTS (Apache-2.0, notice `voices/NOTICE-qwen.txt`) :
+  cinq femmes, un garçon et une fillette, soit vingt voix en tout. Toutes parlent anglais
+  dans leur enregistrement, ce qui ne s'entend pas : seul le timbre est repris. **Personne
+  ne les a encore écoutées** : elles ont été choisies par mesure. Les visages du catalogue
+  restent à trouver.
 - **Moteur d'inférence** : ONNX Runtime avec la carte graphique (ta RTX 3060 convient pour
   développer), repli sur le processeur.
 
@@ -120,7 +139,7 @@ licence (type VB-Cable, déjà présent sur ton PC avec VoiceMeeter) en négocia
 | 2 — Logiciel, capture | Fait : connexion obligatoire, Google/Discord, capture caméra et micro avec aperçu. Manque : choix de la résolution, profils de performance, statistiques processeur / carte graphique / mémoire, réglages persistants |
 | 3 — Visage temps réel | Fait : visage choisi depuis une photo, appliqué à la caméra et à une photo d'essai, sur la carte graphique (DirectML) avec repli sur le processeur. Manque : essai avec une vraie caméra (aucune sur ce PC), plusieurs visages à la fois, netteté (le modèle travaille en 128 × 128), vitesse (15 images/s), `DirectML.dll` à joindre à l'installateur, visages servis par le serveur |
 | 3 bis — Filtres et fenêtre flottante | Fait : filtres posés sur le visage (lunettes, chat, chien) et sur toute l'image (noir et blanc, sépia), dessinés par le cœur à partir des repères du détecteur, sans fichier image (`filters.rs`) ; fenêtre flottante toujours au premier plan qui montre la caméra. Manque : filtres à base d'images ou de 3D, plusieurs visages, suivi de la bouche et des yeux (le détecteur ne donne que 5 points) |
-| 4 — Voix temps réel | Fait : voix clonée à partir d'un enregistrement (`voice.rs`), retour audio (le micro rejoué sur le casque) et cinq effets sans modèle (`effects.rs`). Tout cela ne s'entend que dans le retour audio tant qu'il n'y a pas de micro virtuel. Depuis le 10 octobre 2026 : réduction de bruit du micro, choix de la sortie audio, micro et sortie retenus, bouton pour réapprendre sa voix. Manque : un second moteur plus ressemblant et plus rapide, le réglage de la hauteur, le volume du retour, des voix de femme de meilleure qualité, les réglages gardés côté cœur, les modèles servis par le serveur |
+| 4 — Voix temps réel | Fait : voix clonée à partir d'un enregistrement (`voice.rs`), retour audio (le micro rejoué sur le casque) et cinq effets sans modèle (`effects.rs`). Tout cela ne s'entend que dans le retour audio tant qu'il n'y a pas de micro virtuel. Depuis le 10 octobre 2026 : réduction de bruit du micro, choix de la sortie audio, micro et sortie retenus, bouton pour réapprendre sa voix. Depuis le 11 octobre 2026 : six voix de femme distinctes, voix douces préservées. Manque : un second moteur plus ressemblant et plus rapide (c'est lui, pas le choix des voix, qui limite le réalisme), le réglage de la hauteur, le volume du retour, l'avertissement à l'import d'un enregistrement trop court, les réglages gardés côté cœur, les modèles servis par le serveur |
 | 5 — Caméra et micro virtuels | Tout (voir ci-dessus) |
 | 6 — Modèles servis par le serveur | Catalogue, versions, téléchargement signé et vérifié, cache, reprise, stockage Cloudflare R2 |
 | 7 — Premium | Stripe : paiement, webhooks, annulation, échecs de paiement. La table et le calcul des droits existent déjà |

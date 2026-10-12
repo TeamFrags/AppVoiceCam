@@ -313,7 +313,7 @@ fn main() {
             let face = app_lib::face::FaceSwap::new(args[1].clone().into());
             let picture = fs::read(&args[2]).expect("cannot read the picture");
             face.set_source(&picture).expect("no face in the picture");
-            let swapped = face.swap_photo(&picture).expect("swap failed");
+            let swapped = face.swap_photo(&picture, app_lib::filters::Filter::None, 100).expect("swap failed");
             let big =
                 image::imageops::resize(&swapped, 1280, 720, image::imageops::FilterType::Triangle);
             let (w, h) = (big.width() as usize, big.height() as usize);
@@ -323,7 +323,7 @@ fn main() {
             let mut frames = 0;
             while started.elapsed().as_secs() < seconds {
                 let tick = std::time::Instant::now();
-                face.process_frame(&mut frame, w, h, app_lib::filters::Filter::None);
+                face.process_frame(&mut frame, w, h, app_lib::filters::Filter::None, 100);
                 frames += 1;
                 // A camera hands a frame over every 33 ms at most.
                 if let Some(rest) = std::time::Duration::from_millis(33).checked_sub(tick.elapsed())
@@ -469,6 +469,169 @@ fn main() {
                     )
                     .unwrap();
                 }
+            }
+        }
+        Some("soft") => {
+            // zz_lab soft <models> <voice> <speech> <prefix> : the same speech said louder and
+            // softer by turns, converted live, against the conversion of the whole recording at
+            // full level turned down by the same amounts. For each loudness: how far the level
+            // is from the one asked for, and how far the shape of the sound is.
+            use app_lib::voice::{levelled, Converter, Layout, Stream, VoiceClone};
+            let clone = VoiceClone::new(args[1].clone().into());
+            clone.set_target(fs::read(&args[2]).unwrap(), extension(&args[2])).unwrap();
+            let target = clone.target().unwrap();
+            let input = levelled(load(&args[3]));
+            let mut converter = clone.converter(target);
+            let source = converter.describe(&input).unwrap();
+            let whole = converter.convert(&input, &source).unwrap();
+            const LEVELS: [f32; 9] = [1.0, 0.3, 1.0, 0.1, 0.3, 0.1, 1.0, 0.05, 1.0];
+            let span = 2 * RATE as usize;
+            let ramp = RATE as usize * 60 / 1000;
+            let envelope: Vec<f32> = (0..input.len())
+                .map(|n| {
+                    let at = (n / span) % LEVELS.len();
+                    let (level, into) = (LEVELS[at], n % span);
+                    if into < ramp && n >= span {
+                        let before = LEVELS[(at + LEVELS.len() - 1) % LEVELS.len()];
+                        let turn = 0.5 - 0.5 * (std::f32::consts::PI * into as f32 / ramp as f32).cos();
+                        before + (level - before) * turn
+                    } else {
+                        level
+                    }
+                })
+                .collect();
+            let said: Vec<f32> = input.iter().zip(&envelope).map(|(s, e)| s * e).collect();
+            let ideal: Vec<f32> = whole.iter().zip(&envelope).map(|(s, e)| s * e).collect();
+            let layout = Layout::default();
+            let mut stream = Stream::new(layout);
+            stream.set_speaker(source.clone(), usize::MAX / 2);
+            let mut out = Vec::new();
+            for piece in said.chunks(220) {
+                stream.push(piece, &mut converter, &mut out);
+            }
+            let after = (layout.delay_seconds() * RATE as f32).round() as usize - 12 * 256;
+            let aligned = &out[after.min(out.len())..];
+            let bands = |frame: &[f32]| -> Vec<f32> {
+                let mut planner = rustfft::FftPlanner::<f32>::new();
+                let fft = planner.plan_fft_forward(1024);
+                let mut buf: Vec<rustfft::num_complex::Complex<f32>> = frame
+                    .iter()
+                    .enumerate()
+                    .map(|(n, s)| {
+                        let w = 0.5 - 0.5 * (std::f32::consts::TAU * n as f32 / 1024.0).cos();
+                        rustfft::num_complex::Complex::new(s * w, 0.0)
+                    })
+                    .collect();
+                fft.process(&mut buf);
+                buf[..372]
+                    .chunks(12)
+                    .map(|band| (band.iter().map(|c| c.norm_sqr()).sum::<f32>() + 1e-7).log10() * 10.0)
+                    .collect()
+            };
+            let mut levels: Vec<f32> = LEVELS.to_vec();
+            levels.sort_by(|a, b| b.total_cmp(a));
+            levels.dedup();
+            let edge = RATE as usize * 150 / 1000;
+            println!("{:>6} {:>10} {:>9} {:>7} {:>7}", "level", "level off", "shape off", "silent", "frames");
+            for level in levels {
+                let (mut offset, mut shape, mut count, mut silent) = (0.0f64, 0.0f64, 0usize, 0usize);
+                let mut kept = Vec::new();
+                let mut from = 0;
+                while from + 1024 <= aligned.len().min(whole.len()) {
+                    let (at, into) = ((from / span) % LEVELS.len(), from % span);
+                    let inside = into >= edge && into + 1024 + edge <= span;
+                    if LEVELS[at] == level && inside && rms(&whole[from..from + 1024]) > 0.02 {
+                        let (got, want) = (bands(&aligned[from..from + 1024]), bands(&ideal[from..from + 1024]));
+                        let diff: Vec<f32> = got.iter().zip(&want).map(|(a, b)| a - b).collect();
+                        let mean = diff.iter().sum::<f32>() / diff.len() as f32;
+                        offset += f64::from(mean);
+                        shape += f64::from(
+                            (diff.iter().map(|d| (d - mean) * (d - mean)).sum::<f32>() / diff.len() as f32).sqrt(),
+                        );
+                        count += 1;
+                        if aligned[from..from + 1024].iter().all(|s| *s == 0.0) {
+                            silent += 1;
+                        }
+                    }
+                    if LEVELS[at] == level && inside {
+                        kept.extend(aligned[from..from + 256].iter().map(|s| s / level));
+                    }
+                    from += 256;
+                }
+                let n = count.max(1) as f64;
+                println!(
+                    "{level:6.2} {:7.1} dB {:6.2} dB {:6.0}% {count:7}",
+                    offset / n,
+                    shape / n,
+                    silent as f64 / n * 100.0
+                );
+                fs::write(
+                    format!("{}-live-{level:.2}.wav", args[4]),
+                    app_lib::library::encode_wav(&kept, RATE),
+                )
+                .unwrap();
+            }
+            fs::write(format!("{}-live.wav", args[4]), app_lib::library::encode_wav(&out, RATE)).unwrap();
+            fs::write(format!("{}-ideal.wav", args[4]), app_lib::library::encode_wav(&ideal, RATE)).unwrap();
+            fs::write(format!("{}-said.wav", args[4]), app_lib::library::encode_wav(&said, RATE)).unwrap();
+        }
+        Some("voices") => {
+            // zz_lab voices <models> <dnsmos.onnx> <speech> <out dir> <reference>... : what each
+            // reference recording is worth as a voice to speak with. The speech is converted to
+            // each in one go (the best the model can do), scored, and the descriptions of the
+            // voices are compared with each other: 1 is the same voice.
+            use app_lib::voice::{levelled, speech_only, Converter, VoiceClone};
+            let mut session = Session::builder().unwrap().commit_from_file(&args[2]).unwrap();
+            let clone = VoiceClone::new(args[1].clone().into());
+            let input = levelled(load(&args[3]));
+            fs::create_dir_all(&args[4]).unwrap();
+            let likeness = |a: &[f32], b: &[f32]| -> f32 {
+                let dot: f32 = a.iter().zip(b).map(|(x, y)| x * y).sum();
+                let norm = |v: &[f32]| v.iter().map(|x| x * x).sum::<f32>().sqrt();
+                dot / (norm(a) * norm(b)).max(f32::EPSILON)
+            };
+            let mut described: Vec<(String, Vec<f32>)> = Vec::new();
+            println!(
+                "{:<22} {:>5} {:>4} {:>5} {:>5} | {:>4} {:>4} {:>4} {:>5} {:>9} {:>6} {:>6}",
+                "reference", "sec", "f0", "OVR", "self", "SIG", "BAK", "OVR", "f0", "p10-p90", "clicks", "target"
+            );
+            for path in &args[5..] {
+                let name = Path::new(path).file_stem().unwrap().to_string_lossy().to_string();
+                let reference = load(path);
+                let (_, _, ref_ovr) = dnsmos(&mut session, &to_rate(&reference, RATE, 16_000));
+                let (ref_f0, ..) = pitch_stats(&reference, RATE);
+                clone.set_target(fs::read(path).unwrap(), extension(path)).unwrap();
+                let target = clone.target().unwrap();
+                let mut converter = clone.converter(target.clone());
+                // Is it one voice from end to end? Its two halves, described apart.
+                let speech = levelled(speech_only(&reference));
+                let (first, second) = speech.split_at(speech.len() / 2);
+                let halves = likeness(
+                    &converter.describe(first).unwrap(),
+                    &converter.describe(second).unwrap(),
+                );
+                let source = converter.describe(&input).unwrap();
+                let whole = converter.convert(&input, &source).unwrap();
+                let (sig, bak, ovr) = dnsmos(&mut session, &to_rate(&whole, RATE, 16_000));
+                let (f0, low, high, _) = pitch_stats(&whole, RATE);
+                let reached = likeness(&converter.describe(&levelled(whole.clone())).unwrap(), &target);
+                println!(
+                    "{name:<22} {:5.1} {ref_f0:4.0} {ref_ovr:5.2} {halves:5.2} | {sig:4.2} {bak:4.2} {ovr:4.2} {f0:5.0} {low:4.0}-{high:<4.0} {:6.1} {reached:6.2}",
+                    reference.len() as f32 / RATE as f32,
+                    clicks(&whole, RATE) as f32 / (whole.len() as f32 / RATE as f32) * 10.0,
+                );
+                fs::write(
+                    Path::new(&args[4]).join(format!("{name}.wav")),
+                    app_lib::library::encode_wav(&whole, RATE),
+                )
+                .unwrap();
+                described.push((name, target.to_vec()));
+            }
+            println!("\nlikeness between the voices:");
+            for (name, voice) in &described {
+                let row: Vec<String> =
+                    described.iter().map(|(_, other)| format!("{:4.2}", likeness(voice, other))).collect();
+                println!("{name:<22} {}", row.join(" "));
             }
         }
         Some("edges") => {

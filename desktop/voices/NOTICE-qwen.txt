@@ -1,0 +1,32 @@
+The voices named qwen-*.wav are not recordings of anyone. They were spoken by the Qwen3-TTS
+speech synthesiser (https://github.com/QwenLM/Qwen3-TTS), which is published under the Apache
+License, Version 2.0, through its qwen-tts Python package.
+
+Each file is the same English text. Two were spoken with voices the synthesiser comes with
+(https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice):
+
+  qwen-vivian.wav  Vivian
+  qwen-anna.wav    Ono_Anna
+
+The five others were spoken with voices the synthesiser made up from a written description
+(https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign): no child and no adult was
+recorded for them.
+
+  qwen-deep.wav    a woman in her forties, deep voice
+  qwen-warm.wav    a woman in her thirties, warm voice
+  qwen-bright.wav  a woman in her twenties, bright voice
+  qwen-boy.wav     an eleven-year-old boy
+  qwen-girl.wav    a six-year-old girl
+
+Modification: the output of the synthesiser was stored as 16-bit PCM instead of 32-bit float.
+desktop/scripts/make-voices-qwen.py makes them again.
+
+    Licensed under the Apache License, Version 2.0 (the "License"); you may not use these
+    files except in compliance with the License. You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software distributed under
+    the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied. See the License for the specific language governing
+    permissions and limitations under the License.

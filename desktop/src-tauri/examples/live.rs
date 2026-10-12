@@ -3,6 +3,8 @@
 //!
 //!     cargo run --example live -- <models folder> <reference voice> <speech> <result.wav>
 //!
+//! The reference voice is a recording, or the name of a studio voice (`studio-serena`).
+//!
 //! Prints how often the speaker had nothing to play, which is heard as crackling, and the
 //! delay between the speech and the cloned voice. APP_EFFORT (0 to 3) and APP_ECONOMY choose
 //! what the interface would.
@@ -43,15 +45,25 @@ fn main() {
         std::process::exit(2);
     };
     let clone = Arc::new(VoiceClone::new(models.into()));
-    let reference_audio = fs::read(reference).expect("cannot read the reference voice");
-    clone.set_target(reference_audio, extension(reference)).expect("unusable reference voice");
+    // The name of a studio voice in place of a reference recording: that voice speaks.
+    let studio = clone.studio.has(reference);
+    if studio {
+        clone.set_studio(reference).expect("studio voice not installed");
+    } else {
+        let reference_audio = fs::read(reference).expect("cannot read the reference voice");
+        clone.set_target(reference_audio, extension(reference)).expect("unusable reference voice");
+    }
     let speech_audio = fs::read(speech).expect("cannot read the speech");
     let mut input = Vec::new();
     Resampler::new(voice::RATE, RATE)
         .process(&read_audio(speech_audio, extension(speech)).expect("unusable speech"), &mut input);
+    // A moment of quiet after the last word: what is converted comes out later, and the end of
+    // the speech would not be in the result.
+    let spoken_seconds = input.len() as f32 / RATE as f32;
+    input.extend(std::iter::repeat(0.0).take(RATE as usize));
 
     // APP_KNOWN: the speaker's voice is already described, from this clean recording.
-    if let Ok(known) = env::var("APP_KNOWN") {
+    if let Some(known) = env::var("APP_KNOWN").ok().filter(|_| !studio) {
         use voice::Converter;
         let clean = voice::levelled(
             read_audio(fs::read(&known).expect("cannot read"), extension(&known)).expect("unusable"),
@@ -69,7 +81,7 @@ fn main() {
     queue.lock().unwrap().open(RATE);
     let pending = Arc::<Pending>::default();
     let running = Arc::new(AtomicBool::new(true));
-    {
+    let converting = {
         let (running, settings, clone, economy, pending, queue) = (
             running.clone(),
             settings.clone(),
@@ -80,8 +92,8 @@ fn main() {
         );
         thread::spawn(move || {
             convert_voice(&running, &settings, &clone, &economy, &pending, &queue, RATE)
-        });
-    }
+        })
+    };
     let mut feed = MonitorFeed::new(settings, queue.clone(), RATE, clone, pending);
     let mut output = Vec::new();
     let begin = Instant::now();
@@ -102,6 +114,8 @@ fn main() {
     }
     let gaps = queue.lock().unwrap().gaps;
     running.store(false, Ordering::SeqCst);
+    // Not left in the middle of a run of the model when the program ends.
+    let _ = converting.join();
 
     // The delay is how far back the output must be moved for its loudness to follow the input's.
     let loudness = |sound: &[f32]| -> Vec<f32> {
@@ -111,8 +125,7 @@ fn main() {
     let alike = |delay: usize| spoken.iter().zip(&heard[delay..]).map(|(a, b)| a * b).sum::<f32>();
     let delay = (0..150).max_by(|a, b| alike(*a).total_cmp(&alike(*b))).unwrap_or(0);
     println!(
-        "{:.1} s of speech: nothing to play {gaps} times, delay about {} ms",
-        input.len() as f32 / RATE as f32,
+        "{spoken_seconds:.1} s of speech: nothing to play {gaps} times, delay about {} ms",
         delay * 10
     );
     fs::write(result, encode_wav(&output, RATE)).expect("cannot write the result");
